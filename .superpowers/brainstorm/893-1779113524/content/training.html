@@ -1,0 +1,71 @@
+<h2>检测模型训练 & 低照支持</h2>
+<p class="subtitle">YOLO26s 3分类 + 暗光数据增强</p>
+
+<div class="split">
+  <div class="mockup">
+    <div class="mockup-header">模型训练计划</div>
+    <div class="mockup-body">
+      <table style="width:100%; font-size:13px; border-collapse:collapse;">
+        <tr><td style="padding:4px 8px; color:#888;">基础架构</td><td style="padding:4px 8px;"><b>YOLO26s</b> (与 V5 同系列)</td></tr>
+        <tr><td style="padding:4px 8px; color:#888;">输入尺寸</td><td style="padding:4px 8px;">640×640 RGB</td></tr>
+        <tr><td style="padding:4px 8px; color:#888;">检测头</td><td style="padding:4px 8px;">3头 (stride 8/16/32)</td></tr>
+        <tr><td style="padding:4px 8px; color:#888;">类别</td><td style="padding:4px 8px;">0=person, 1=bicycle, 2=motorcycle</td></tr>
+        <tr><td style="padding:4px 8px; color:#888;">预训练</td><td style="padding:4px 8px;">yolo26s.pt (COCO)</td></tr>
+        <tr><td style="padding:4px 8px; color:#888;">主力数据</td><td style="padding:4px 8px;">BDD100K + COCO (person/bicycle/motorcycle)</td></tr>
+        <tr><td style="padding:4px 8px; color:#888;">输出格式</td><td style="padding:4px 8px;">boxes [1,4,8400] + scores [1,3,8400]</td></tr>
+      </table>
+    </div>
+  </div>
+
+  <div class="mockup">
+    <div class="mockup-header">低照场景策略</div>
+    <div class="mockup-body">
+      <div style="font-size:13px; line-height:1.8;">
+
+<div style="background:#1a1a1a; padding:10px; border-radius:4px; margin-bottom:8px;">
+<b>训练侧 — 数据增强 (参考 V5 IR 方案)</b><br/>
+· <b>Dark 增强</b>: 随机降低亮度 (gamma 0.3-0.7)<br/>
+· <b>Low contrast</b>: 降低对比度模拟雾/暗光<br/>
+· <b>Noise</b>: 加高斯噪声模拟低照传感器噪声<br/>
+· BDD100K 已含夜间数据
+</div>
+
+<div style="background:#1a1a1a; padding:10px; border-radius:4px; margin-bottom:8px;">
+<b>推理侧 — 无需额外处理</b><br/>
+· 模型通过增强训练已适应暗光<br/>
+· 板端无额外预处理开销
+</div>
+
+<div style="background:#1a1a1a; padding:10px; border-radius:4px;">
+<b>硬件配合 (如需)</b><br/>
+· 摄像头选 IR-CUT 双滤光片<br/>
+· 低照自动切红外 + 红外补光灯
+</div>
+
+      </div>
+    </div>
+  </div>
+</div>
+
+<h3 style="margin-top:20px;">训练流程 (复用 DEPLOYMENT_GUIDE.md V5 流程)</h3>
+
+<div class="mockup">
+  <div class="mockup-body">
+    <div style="display:flex; align-items:center; gap:8px; font-size:13px; flex-wrap:wrap;">
+      <div style="background:#4a9eff; color:#fff; padding:6px 14px; border-radius:20px;">1. 数据准备<br/>BDD100K+COCO</div>
+      <span>→</span>
+      <div style="background:#4a9eff; color:#fff; padding:6px 14px; border-radius:20px;">2. AutoDL 训练<br/>YOLO26s 100ep</div>
+      <span>→</span>
+      <div style="background:#4a9eff; color:#fff; padding:6px 14px; border-radius:20px;">3. export ONNX<br/>640×640 + NMS</div>
+      <span>→</span>
+      <div style="background:#7c3aed; color:#fff; padding:6px 14px; border-radius:20px;">4. split head<br/>remove sigmoid</div>
+      <span>→</span>
+      <div style="background:#7c3aed; color:#fff; padding:6px 14px; border-radius:20px;">5. pegasus<br/>量化 uint8</div>
+      <span>→</span>
+      <div style="background:#22c55e; color:#fff; padding:6px 14px; border-radius:20px;">6. NB 板端<br/>推理验证</div>
+    </div>
+  </div>
+</div>
+
+<p style="margin-top:12px; font-size:13px; color:#aaa;">训练流程完全复用 DEPLOYMENT_GUIDE.md 的 V5 链路，区别仅在于：<b>类别数 4→3，输出 scores 通道 4→3</b>。</p>
+

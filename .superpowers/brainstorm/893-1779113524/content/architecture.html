@@ -1,0 +1,128 @@
+<h2>BSD 报警系统 - 整体架构</h2>
+<p class="subtitle">V853 板端推理 + 报警区域后处理</p>
+
+<div class="mockup">
+  <div class="mockup-header">系统架构概览</div>
+  <div class="mockup-body">
+    <div style="display:flex; gap:20px; flex-wrap:wrap;">
+
+      <!-- 左侧：数据采集 -->
+      <div style="flex:1; min-width:200px; border:2px solid #4a9eff; border-radius:8px; padding:12px;">
+        <h4 style="color:#4a9eff; margin:0 0 8px 0;">1. 视频采集</h4>
+        <div class="placeholder" style="min-height:60px;">板端摄像头<br/>640×640 RGB</div>
+        <p style="font-size:12px; color:#888;">MIPI / USB 摄像头</p>
+      </div>
+
+      <!-- 中间：推理 -->
+      <div style="flex:1; min-width:200px; border:2px solid #ff8c00; border-radius:8px; padding:12px;">
+        <h4 style="color:#ff8c00; margin:0 0 8px 0;">2. NPU 推理</h4>
+        <div class="placeholder" style="min-height:60px;">YOLO26s 检测<br/>行人/自行车/摩托车<br/>电瓶车/三轮车</div>
+        <p style="font-size:12px; color:#888;">boxes [1,4,8400]<br/>scores [1,5,8400]</p>
+      </div>
+
+      <!-- 右侧：后处理 -->
+      <div style="flex:1; min-width:200px; border:2px solid #22c55e; border-radius:8px; padding:12px;">
+        <h4 style="color:#22c55e; margin:0 0 8px 0;">3. 报警后处理</h4>
+        <div class="placeholder" style="min-height:60px;">区域判定 + 时长跟踪<br/>→ 报警输出</div>
+        <p style="font-size:12px; color:#888;">4点标定 / 3级区域<br/>停留 > 1s</p>
+      </div>
+
+    </div>
+  </div>
+</div>
+
+<h3 style="margin-top:24px;">核心数据流</h3>
+
+<div class="mockup">
+  <div class="mockup-header">运行时数据流</div>
+  <div class="mockup-body">
+    <div style="display:flex; flex-direction:column; gap:12px; align-items:center; font-size:14px;">
+
+      <div style="display:flex; align-items:center; gap:8px; width:100%;">
+        <div style="background:#4a9eff; color:#fff; padding:6px 16px; border-radius:20px; min-width:80px; text-align:center;">摄像头帧</div>
+        <span>→</span>
+        <div style="background:#7c3aed; color:#fff; padding:6px 16px; border-radius:20px; min-width:80px; text-align:center;">Letterbox<br/>640×640</div>
+        <span>→</span>
+        <div style="background:#7c3aed; color:#fff; padding:6px 16px; border-radius:20px; min-width:80px; text-align:center;">RGB<br/>planar</div>
+        <span>→</span>
+        <div style="background:#ff8c00; color:#fff; padding:6px 16px; border-radius:20px; min-width:80px; text-align:center;">NPU<br/>推理</div>
+      </div>
+
+      <span style="font-size:24px;">↓</span>
+
+      <div style="display:flex; align-items:center; gap:8px; width:100%;">
+        <div style="background:#ff8c00; color:#fff; padding:6px 16px; border-radius:20px; min-width:80px; text-align:center;">Boxes<br/>+ Scores</div>
+        <span>→</span>
+        <div style="background:#22c55e; color:#fff; padding:6px 16px; border-radius:20px; min-width:80px; text-align:center;">坐标<br/>映射回原图</div>
+        <span>→</span>
+        <div style="background:#22c55e; color:#fff; padding:6px 16px; border-radius:20px; min-width:80px; text-align:center;">点在<br/>区域内?</div>
+        <span>→</span>
+        <div style="background:#ef4444; color:#fff; padding:6px 16px; border-radius:20px; min-width:80px; text-align:center;">跟踪<br/>& 报警</div>
+      </div>
+
+    </div>
+  </div>
+</div>
+
+<h3 style="margin-top:24px;">训练数据来源</h3>
+<p class="subtitle">以下开源数据集覆盖了行人、自行车、摩托车等类别</p>
+
+<table style="width:100%; border-collapse:collapse; font-size:14px;">
+  <tr style="background:#2a2a2a;">
+    <th style="padding:8px; text-align:left; border:1px solid #444;">数据集</th>
+    <th style="padding:8px; text-align:left; border:1px solid #444;">覆盖类别</th>
+    <th style="padding:8px; text-align:left; border:1px solid #444;">规模</th>
+    <th style="padding:8px; text-align:left; border:1px solid #444;">场景</th>
+  </tr>
+  <tr>
+    <td style="padding:8px; border:1px solid #444; font-weight:bold;">BDD100K</td>
+    <td style="padding:8px; border:1px solid #444;">person, bicycle, motorcycle</td>
+    <td style="padding:8px; border:1px solid #444;">100K 张</td>
+    <td style="padding:8px; border:1px solid #444;">街景驾驶</td>
+  </tr>
+  <tr style="background:#2a2a2a;">
+    <td style="padding:8px; border:1px solid #444; font-weight:bold;">COCO</td>
+    <td style="padding:8px; border:1px solid #444;">person, bicycle, motorcycle</td>
+    <td style="padding:8px; border:1px solid #444;">300K+ 张</td>
+    <td style="padding:8px; border:1px solid #444;">通用场景</td>
+  </tr>
+  <tr>
+    <td style="padding:8px; border:1px solid #444; font-weight:bold;">KITTI</td>
+    <td style="padding:8px; border:1px solid #444;">pedestrian, cyclist</td>
+    <td style="padding:8px; border:1px solid #444;">15K 张</td>
+    <td style="padding:8px; border:1px solid #444;">街景驾驶</td>
+  </tr>
+  <tr style="background:#2a2a2a;">
+    <td style="padding:8px; border:1px solid #444; font-weight:bold;">nuScenes</td>
+    <td style="padding:8px; border:1px solid #444;">pedestrian, bicycle, motorcycle</td>
+    <td style="padding:8px; border:1px solid #444;">1.4M 张</td>
+    <td style="padding:8px; border:1px solid #444;">多城市街景</td>
+  </tr>
+  <tr>
+    <td style="padding:8px; border:1px solid #444; font-weight:bold;">CityPersons</td>
+    <td style="padding:8px; border:1px solid #444;">pedestrian</td>
+    <td style="padding:8px; border:1px solid #444;">5K 张</td>
+    <td style="padding:8px; border:1px solid #444;">城市街道</td>
+  </tr>
+  <tr style="background:#2a2a2a;">
+    <td style="padding:8px; border:1px solid #444; font-weight:bold;">UA-DETRAC</td>
+    <td style="padding:8px; border:1px solid #444;">vehicle (含非机动车)</td>
+    <td style="padding:8px; border:1px solid #444;">140K 帧</td>
+    <td style="padding:8px; border:1px solid #444;">交通监控</td>
+  </tr>
+  <tr>
+    <td style="padding:8px; border:1px solid #444; font-weight:bold;">Tsinghua-Daimler</td>
+    <td style="padding:8px; border:1px solid #444;">pedestrian, cyclist</td>
+    <td style="padding:8px; border:1px solid #444;">38K 标注</td>
+    <td style="padding:8px; border:1px solid #444;">车载视角</td>
+  </tr>
+</table>
+
+<div class="section" style="margin-top:16px;">
+  <h4>注意事项</h4>
+  <ul>
+    <li><strong>电瓶车/三轮车</strong> — 开源数据集中少有直接标注，通常需从 COCO motorcycle + bicycle 中筛选或自行标注补充</li>
+    <li>建议用 BDD100K + COCO 作为主力训练集，再补充少量自标数据覆盖电瓶车/三轮车</li>
+    <li>低照场景：BDD100K 包含夜间数据；可额外用暗光增强扩充</li>
+  </ul>
+</div>
