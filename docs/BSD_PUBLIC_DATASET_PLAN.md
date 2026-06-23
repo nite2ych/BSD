@@ -1,62 +1,53 @@
-# BSD Public Dataset Plan
+# BSD 公开数据集计划
 
-This document fixes the public-data route for the BSD detector. The current
-deployment candidate is `YOLO26n@640` because its quantized NB fits the hard
-`<5 MB` gate while preserving better BSD proxy accuracy. The 5/20
-`YOLO26s@640` model is kept as the fixed accuracy baseline.
+本文档固定 BSD 检测器的公开数据路线。当前主线候选是 `YOLO26n_noattn + ReLU + 640` 的 v9.1，因为量化 NB 满足硬性 `<5 MB` 门槛，同时在 BSD proxy 上有更合理的 person/vehicle recall。5/20 的 `YOLO26s@640` 保留为固定精度基线，v7 保留为稳定回退。
 
-## Acceptance Target
+## 验收目标
 
-The target is not just a smaller or faster model. The target is a quantized
-`YOLO26n` model whose accuracy is good enough for BSD deployment and whose
-Pegasus `network_binary.nb` is smaller than 5 MB.
+目标不是单纯更小或更快，而是训练出一个精度足够支撑 BSD 部署、且 Pegasus `network_binary.nb` 小于 5 MB 的量化模型。
 
-`YOLO26n@640` is the current main candidate. `YOLO26n@512` remains a fallback
-only if board throughput forces another size reduction.
+当前主线是 `YOLO26n_noattn + ReLU + 640`。`YOLO26n@512` 仅在板端吞吐强制要求继续降尺寸时作为兜底。
 
-| Gate | Requirement |
+| 门槛 | 要求 |
 |---|---|
-| Overall accuracy | Close to the v4 `YOLO26s@640` baseline on `coco_val`; any mAP50 regression must be explained by better BSD-scene behavior |
-| Road-scene accuracy | Match or exceed v4 on `bdd_proxy_val` |
-| Person | No obvious recall collapse on close-range and medium-range people |
-| Bicycle/motorcycle | No obvious two-wheel recall collapse; small targets must be checked visually |
-| Vehicle | No recurring large false-positive boxes |
-| Thresholds | Evaluated at `conf=0.5`, `nms=0.45`; do not lower thresholds to recover recall |
-| Board readiness | Only after PC accuracy passes: export, split, quantize, then validate with `test_npu_direct` and `live_bsd headless` |
+| 整体精度 | 在 `coco_val` 上接近 v4 `YOLO26s@640` 基线；若 mAP50 下降，必须能用更好的 BSD 场景表现解释 |
+| 道路场景精度 | 在 `bdd_proxy_val` 上匹配或超过 v4 |
+| person | 近距离和中距离 person 不能明显召回塌陷 |
+| bicycle/motorcycle | 两轮车召回不能明显塌陷；小目标必须做可视化检查 |
+| vehicle | 不能反复出现大框误检 |
+| 阈值 | 固定 `conf=0.5`, `nms=0.45` 评估；不要靠降低阈值追回 recall |
+| 板端就绪 | PC 精度通过后，才进行 export、split、quantize，并用 `test_npu_direct` 和 `live_bsd headless` 验证 |
 
-If the current `n@640` candidate regresses on these gates, the next action is
-data/training improvement, not board optimization. Smaller inputs are only
-throughput fallbacks.
+如果当前候选过不了这些门槛，下一步应做数据/训练改进，而不是先优化板端。更小输入只作为吞吐兜底。
 
-## Fixed Baseline
+## 固定基线
 
-| Item | Value |
+| 项目 | 值 |
 |---|---|
-| Baseline name | `bsd_v4_150ep` |
-| Weight | `/root/autodl-tmp/BSD/artifacts/bsd_v4_150ep/weights/best.pt` |
+| 基线名 | `bsd_v4_150ep` |
+| 权重 | `/root/autodl-tmp/BSD/artifacts/bsd_v4_150ep/weights/best.pt` |
 | MD5 | `bfc40b3fbfd6001e83c7de680412587d` |
-| Model | `YOLO26s@640` |
-| Thresholds | `conf=0.5`, `nms=0.45` |
-| Board path | `live_bsd headless`; preview is debug only |
+| 模型 | `YOLO26s@640` |
+| 阈值 | `conf=0.5`, `nms=0.45` |
+| 板端路径 | `live_bsd headless`；preview 只用于调试 |
 
-Known PC metrics:
+已知 PC 指标：
 
-| Validation set | P | R | mAP50 | mAP50-95 |
+| 验证集 | P | R | mAP50 | mAP50-95 |
 |---|---:|---:|---:|---:|
 | `coco_val` | 0.818 | 0.557 | 0.652 | 0.425 |
 | `bdd_proxy_val` | 0.678 | 0.502 | 0.556 | 0.336 |
 
-Every new candidate must be compared against this table before any board-side
-conversion work is treated as useful.
+任何新候选在进入板端转换前，都必须先和这张表对比。
 
-## Target Route
+## 目标路线
 
-The current route is:
+当前路线：
 
 ```text
 public/reviewed data
-  -> bsd_v6_public_kitti
-  -> YOLO26n@640 stage1
+  -> bsd_v6_public_kitti / bsd_v9p1_pv_priority
+  -> YOLO26n_noattn + ReLU + 640
   -> PT/ONNX accuracy check
   -> split raw-logit ONNX
   -> Pegasus NB
@@ -64,25 +55,24 @@ public/reviewed data
   -> live_bsd headless
 ```
 
-Do not change `DetResult` or `AlarmEvent` for dataset work. Do not lower
-thresholds to hide training regressions.
+数据工作不改 `DetResult` 或 `AlarmEvent`。不要用降低阈值掩盖训练回退。
 
-## Dataset Priority
+## 数据集优先级
 
-| Priority | Dataset | Main value | Use |
+| 优先级 | 数据集 | 主要价值 | 用法 |
 |---:|---|---|---|
-| 1 | BDD100K official detection labels | Driving scenes; pedestrian, bicycle, motorcycle, car, bus, truck | Main public supplement |
-| 2 | KITTI object detection | Clean road-scene labels; car, pedestrian, cyclist | Validation and small supplement |
-| 2 | CityPersons | Higher quality pedestrian boxes on Cityscapes | Person recall supplement |
-| 2 | WiderPerson | Dense/occluded people, small targets | Person hard-case supplement |
-| 3 | MIO-TCD localization | Traffic-camera viewpoint; vehicle-heavy; includes bicycles/motorcycles/pedestrians | Vehicle/two-wheel supplement if license/download is clear |
-| 3 | VisDrone DET | Small objects, crowded urban views | Hard-case supplement; use limited ratio because viewpoint differs |
-| 3 | Open Images V7 subset | Easy class-subset download for person/bicycle/motorcycle/vehicle-like classes | Controlled extra data or hard negatives |
-| 3 | nuImages | Autonomous-driving 2D boxes, non-commercial | Optional road-scene supplement after license check |
+| 1 | BDD100K official detection labels | 驾驶场景；pedestrian、bicycle、motorcycle、car、bus、truck | 主要公开补充 |
+| 2 | KITTI object detection | 干净道路标签；car、pedestrian、cyclist | 验证和小比例补充 |
+| 2 | CityPersons | Cityscapes 上更高质量 pedestrian 框 | person recall 补充 |
+| 2 | WiderPerson | 密集/遮挡人群、小目标 | person hard-case 补充 |
+| 3 | MIO-TCD localization | 交通摄像头视角；vehicle-heavy；含 bicycle/motorcycle/pedestrian | license/download 明确后作为 vehicle/two-wheel 补充 |
+| 3 | VisDrone DET | 小目标、拥挤城市视角 | hard-case 补充；视角不同，比例要低 |
+| 3 | Open Images V7 subset | person/bicycle/motorcycle/vehicle-like 类别易下载 | 受控额外数据或 hard negative |
+| 3 | nuImages | 自动驾驶 2D 框，非商用 | license 通过后可选道路场景补充 |
 
-Reference links:
+参考链接：
 
-| Dataset | Official/reference URL |
+| 数据集 | 官方/参考 URL |
 |---|---|
 | BDD100K | https://bair.berkeley.edu/blog/2018/05/30/bdd/ |
 | BDD100K download layout note | https://docs.voxel51.com/dataset_zoo/datasets/bdd100k.html |
@@ -102,59 +92,54 @@ Reference links:
 | Audi A2D2 | https://www.a2d2.audi/a2d2/ |
 | Mapillary Vistas | https://www.mapillary.com/dataset/vistas |
 
-## 2026-06-13 v9.2 Public Data Search
+## 2026-06-13 v9.2 公开数据搜索
 
-Current objective: improve v9.1 base recall for BSD-critical `person` and
-`vehicle` without changing the selected deployable model shape
-(`YOLO26n_noattn + ReLU + 640`). Board-side real capture is not available yet,
-so public data must fill the gap temporarily.
+当前目标：在不改变可部署模型形态（`YOLO26n_noattn + ReLU + 640`）的情况下，提高 v9.1 base 对 BSD 关键 `person` 和 `vehicle` 的 recall。当前还没有板端真实采集条件，所以公开数据只能暂时补空。
 
-Use the following source tiers:
+数据源分层：
 
-| Tier | Dataset | Status | Expected BSD value | Action |
+| 层级 | 数据集 | 状态 | 预期 BSD 价值 | 动作 |
 |---:|---|---|---|---|
-| 1 | BDD100K Detection 2020 | Already has importer | Main road-scene base; person/rider/bike/motorcycle/vehicle | Keep as base, but audit labels and cap vehicle-only images |
-| 1 | CityPersons | Needs Cityscapes images plus annotation import | Clean urban pedestrian/rider boxes | Add importer; train as person-heavy supplement |
-| 1 | EuroCity Persons | License/application required | Large on-board urban person/cyclist/rider set, day/night diversity | Apply/download if license allows; add as person-heavy supplement |
-| 2 | KITTI Object | Already has importer | Clean car/pedestrian/cyclist labels, small but trusted | Keep as calibration/validation-like supplement, not large weight |
-| 2 | nuImages | Account/terms required | 93k 2D annotated autonomous-driving images | Add later if download is available; good road-scene domain match |
-| 2 | Waymo Open Dataset 2D camera labels | Large TFRecord pipeline needed | Strong vehicle/pedestrian/cyclist labels; multi-city domain | Use only after lightweight sources; sample subset first |
-| 3 | A2D2 | Very large download; mostly 3D/semantic sources | Side/rear multi-camera vehicle context | Optional; high conversion cost |
-| 3 | Mapillary Vistas | Polygon segmentation, not box-native | Street-level hard negatives and person/vehicle diversity | Optional; polygon-to-box conversion and license review required |
-| 3 | Objects365/Open Images subset | Generic web images | Extra hard negatives and uncommon vehicle/person cases | Use only curated subset; avoid domain drift |
+| 1 | BDD100K Detection 2020 | 已有 importer | 主要道路场景基座；person/rider/bike/motorcycle/vehicle | 作为 base 保留，但审核标签并限制纯 vehicle 图 |
+| 1 | CityPersons | 需要 Cityscapes 图片和 annotation import | 干净城市 pedestrian/rider 框 | 增加 importer，作为 person-heavy 补充训练 |
+| 1 | EuroCity Persons | 需要 license/application | 大规模 onboard 城市 person/cyclist/rider，含 day/night | license 允许后下载，作为 person-heavy 补充 |
+| 2 | KITTI Object | 已有 importer | 干净 car/pedestrian/cyclist 标签，规模小但可信 | 保留为校准/验证风格补充，不加大权重 |
+| 2 | nuImages | 需要账号/条款 | 93k 2D 自动驾驶标注图 | 可下载后再加；道路域匹配好 |
+| 2 | Waymo Open Dataset 2D camera labels | 需要大型 TFRecord 流程 | 多城市 vehicle/pedestrian/cyclist 标签强 | 轻量来源之后再用；先抽样子集 |
+| 3 | A2D2 | 下载很大；偏 3D/semantic | 侧后多摄 vehicle 场景 | 可选；转换成本高 |
+| 3 | Mapillary Vistas | polygon segmentation，非 box-native | street-level hard negatives 和 person/vehicle 多样性 | 可选；需要 polygon-to-box 和 license review |
+| 3 | Objects365/Open Images subset | 通用网络图 | 额外 hard negative 和少见 person/vehicle 案例 | 只用精选子集，避免域漂移 |
 
-Immediate recommendation:
+即时建议：
 
-1. Do **not** start from Waymo/A2D2 because they are heavy and conversion-heavy.
-2. First build a small, clean `bsd_v9p2_public_expand` from:
-   - existing BDD/KITTI base;
-   - CityPersons, if Cityscapes access is available;
-   - EuroCity Persons, if license/download approval is available;
-   - a small reviewed hard-negative subset from Open Images or Objects365 only
-     if false positives remain a problem.
-3. Keep source share controlled. Do not let a generic dataset exceed the road
-   scene base, and do not let vehicle-only images dominate the added data.
+1. 不从 Waymo/A2D2 开始，因为下载和转换成本都高。
+2. 先构建一个小而干净的 `bsd_v9p2_public_expand`：
+   - 现有 BDD/KITTI base；
+   - 如果 Cityscapes 可访问，加入 CityPersons；
+   - 如果 EuroCity Persons license/download 通过，加入 EuroCity Persons；
+   - 若误检仍严重，再加入小规模人工审核 Open Images 或 Objects365 hard-negative 子集。
+3. 控制来源比例。通用数据集不能超过道路场景 base，纯 vehicle 图不能主导新增数据。
 
-Target mix for the first v9.2 experiment:
+第一版 v9.2 目标混合：
 
-| Added data bucket | Target images | Notes |
+| 新增数据桶 | 目标图片数 | 备注 |
 |---|---:|---|
-| Road-scene person/rider | `3k-8k` | Small, occluded, side/rear, low-light are most valuable |
-| Person + vehicle in same road scene | `2k-5k` | Best proxy for BSD interaction risk |
-| Vehicle hard negatives / difficult vehicle | `1k-3k` | Guardrails, signs, poles, shadows, partial cars |
-| Bicycle/motorcycle/rider | `1k-3k` | Keep, but selection still follows visible person quality |
-| Empty/hard-negative frames | `5%-10%` of train | Only reviewed negatives; avoid random scenery |
+| 道路 person/rider | `3k-8k` | 小目标、遮挡、侧后方、低照度最有价值 |
+| person + vehicle 同场景 | `2k-5k` | 最接近 BSD 交互风险 |
+| vehicle hard negatives / difficult vehicle | `1k-3k` | 护栏、标志牌、杆体、阴影、局部车身 |
+| bicycle/motorcycle/rider | `1k-3k` | 保留，但选择仍优先看可见 person 质量 |
+| empty/hard-negative frames | train 的 `5%-10%` | 只用审核过的负样本，避免随机风景 |
 
-Importer work needed:
+需要的 importer：
 
-| Importer | Priority | Output |
+| importer | 优先级 | 输出 |
 |---|---:|---|
-| `import_citypersons.py` | 1 | BSD YOLO labels with `pedestrian/rider` mapped to `person`; sitting/other/group ignored by default |
-| `import_eurocity_persons.py` | 1 | BSD YOLO labels for standardized EuroCity-style `pedestrian/rider/cyclist` JSON mapped to `person` |
-| `import_nuimages.py` | 2 | BSD YOLO labels for pedestrian/bicycle/motorcycle/car/bus/truck/trailer-like classes |
-| `import_waymo_2d.py` | 3 | Sampled camera frames only; map vehicle/pedestrian/cyclist and ignore signs |
+| `import_citypersons.py` | 1 | BSD YOLO 标签，`pedestrian/rider` 映射到 `person`；默认忽略 sitting/other/group |
+| `import_eurocity_persons.py` | 1 | 标准 EuroCity 风格 `pedestrian/rider/cyclist` JSON 映射到 `person` |
+| `import_nuimages.py` | 2 | pedestrian/bicycle/motorcycle/car/bus/truck/trailer-like 类别转 BSD YOLO |
+| `import_waymo_2d.py` | 3 | 只采样 camera frames；映射 vehicle/pedestrian/cyclist，忽略 signs |
 
-CityPersons import command:
+CityPersons 导入命令：
 
 ```bash
 python deployment/dataset/import_citypersons.py \
@@ -166,7 +151,7 @@ python deployment/dataset/import_citypersons.py \
   --overwrite
 ```
 
-Then add it to v9.1/v9.2 dataset construction:
+再加入 v9.1/v9.2 数据构建：
 
 ```bash
 python deployment/dataset/build_bsd_v9p1_pv_priority.py \
@@ -177,11 +162,9 @@ python deployment/dataset/build_bsd_v9p1_pv_priority.py \
   --link-mode hardlink
 ```
 
-CityPersons is person-only after BSD mapping. It should be used as a recall
-supplement, not as a new validation source. Keep `bdd_proxy_val` and later
-`board_val` as the BSD-oriented selection gates.
+CityPersons 按 BSD 映射后是 person-only。它应作为 recall 补充，而不是新的验证源。仍以 `bdd_proxy_val` 和未来 `board_val` 作为 BSD 选择门槛。
 
-EuroCity Persons standardized JSON import command:
+EuroCity Persons 标准 JSON 导入命令：
 
 ```bash
 python deployment/dataset/import_eurocity_persons.py \
@@ -193,7 +176,7 @@ python deployment/dataset/import_eurocity_persons.py \
   --overwrite
 ```
 
-Then add it to the v9.2 dataset together with CityPersons:
+再与 CityPersons 一起加入 v9.2：
 
 ```bash
 python deployment/dataset/build_bsd_v9p1_pv_priority.py \
@@ -205,155 +188,137 @@ python deployment/dataset/build_bsd_v9p1_pv_priority.py \
   --link-mode hardlink
 ```
 
-The EuroCity importer currently targets standardized per-image JSON. If the
-downloaded official package uses a different native JSON layout, extend
-`import_eurocity_persons.py` in place rather than creating a second data path.
+EuroCity importer 当前面向标准 per-image JSON。如果下载到的官方包使用不同原始 JSON 布局，应在 `import_eurocity_persons.py` 内扩展，而不是新开第二条数据路径。
 
-Execution order after downloads are available:
+下载可用后的执行顺序：
 
-1. Place Cityscapes `leftImg8bit` under
-   `/root/autodl-tmp/BSD/datasets/cityscapes/leftImg8bit`.
-2. Place CityPersons `gtBboxCityPersons.mat` under
-   `/root/autodl-tmp/BSD/datasets/citypersons`.
-3. Run `import_citypersons.py` and inspect
-   `citypersons_bsd_person/manifest.json`.
-4. Place EuroCity images and standardized JSON under the paths shown above.
-5. Run `import_eurocity_persons.py` and inspect
-   `eurocity_persons_bsd_person/manifest.json`.
-6. Build `bsd_v9p2_public_expand` with both `--extra-set` inputs.
-7. Compare the new manifest against v9.1 base before training:
-   - person objects should increase clearly;
-   - vehicle-only source share should not dominate;
-   - empty/hard-negative frames should stay controlled.
-8. Fine-tune from v9.1 base and evaluate using
-   `tools/evaluate_bsd_pv_priority.py`.
+1. 将 Cityscapes `leftImg8bit` 放到 `/root/autodl-tmp/BSD/datasets/cityscapes/leftImg8bit`。
+2. 将 CityPersons `gtBboxCityPersons.mat` 放到 `/root/autodl-tmp/BSD/datasets/citypersons`。
+3. 运行 `import_citypersons.py`，检查 `citypersons_bsd_person/manifest.json`。
+4. 按上述路径放置 EuroCity 图片和标准 JSON。
+5. 运行 `import_eurocity_persons.py`，检查 `eurocity_persons_bsd_person/manifest.json`。
+6. 使用两个 `--extra-set` 构建 `bsd_v9p2_public_expand`。
+7. 训练前对比新 manifest 和 v9.1 base：
+   - person objects 应明显增加；
+   - vehicle-only 来源比例不能主导；
+   - empty/hard-negative frames 比例受控。
+8. 从 v9.1 base 微调，并用 `tools/evaluate_bsd_pv_priority.py` 评估。
 
-Selection rule for v9.2:
+v9.2 选择规则：
 
-- Optimize for `bdd_proxy_val` `PV Recall` first, then `PV mAP50`.
-- v9.1 base is the starting point and comparison target.
-- v7 remains the stable fallback; new data must narrow the v9.1-v7 gap without
-  increasing obvious large false positives.
-- Any public-data improvement remains provisional until a real `board_val`
-  exists.
+- 优先优化 `bdd_proxy_val` 的 `PV Recall`，其次看 `PV mAP50`。
+- v9.1 base 是起点和对比目标。
+- v7 仍是稳定回退；新数据必须缩小 v9.1 与 v7 的差距，同时不能增加明显大框误检。
+- 所有公开数据改进在真实 `board_val` 出现前都只是暂定结论。
 
-## 2026-06-13 v9.2 Current-Data Sanity Run
+## 2026-06-13 v9.2 当前数据 Sanity Run
 
-Before CityPersons/EuroCity data became available, a current-data sanity run was
-started to verify that the fastest deployable model shape still trains cleanly:
+在 CityPersons/EuroCity 可用前，先跑了 current-data sanity run，用于确认最快可部署模型形态仍能正常训练：
 
-| Item | Value |
+| 项目 | 值 |
 |---|---|
-| Config | `training/detection/configs/bsd_v9p2_yolo26n_noattn_relu_640_currentdata.yaml` |
-| Architecture | `YOLO26n_noattn + ReLU + 640` |
-| Initial weights | `artifacts/bsd_v9p1_yolo26n_noattn_relu_640_pv_priority/weights/best.pt` |
-| Dataset | `datasets/bsd_v9p1_pv_priority` |
-| Server artifact | `artifacts/bsd_v9p2_yolo26n_noattn_relu_640_currentdata` |
-| Early stop | epoch 21, best epoch 9 |
+| 配置 | `training/detection/configs/bsd_v9p2_yolo26n_noattn_relu_640_currentdata.yaml` |
+| 架构 | `YOLO26n_noattn + ReLU + 640` |
+| 初始权重 | `artifacts/bsd_v9p1_yolo26n_noattn_relu_640_pv_priority/weights/best.pt` |
+| 数据集 | `datasets/bsd_v9p1_pv_priority` |
+| 服务器产物 | `artifacts/bsd_v9p2_yolo26n_noattn_relu_640_currentdata` |
+| Early stop | epoch 21，best epoch 9 |
 
-Independent PV evaluation:
+独立 PV 评估：
 
-| Dataset | Candidate | P | R | mAP50 | PV Recall | PV mAP50 |
+| 数据集 | 候选 | P | R | mAP50 | PV Recall | PV mAP50 |
 |---|---|---:|---:|---:|---:|---:|
 | `bdd_proxy_val` | v9 ReLU from v8 | `0.753` | `0.577` | `0.673` | `0.741` | `0.798` |
 | `bdd_proxy_val` | v9.1 base | `0.720` | `0.602` | `0.677` | `0.760` | `0.797` |
 | `bdd_proxy_val` | v9.2 currentdata | `0.750` | `0.578` | `0.668` | `0.739` | `0.795` |
 
-Decision: do **not** select v9.2 currentdata. It proves the training/export path
-is healthy but does not improve BSD-critical person/vehicle recall. Keep v9.1
-base as the selected accuracy recovery candidate until real public-data
-expansion is available.
+结论：**不选择 v9.2 currentdata**。它证明训练/导出路径正常，但没有提升 BSD 关键 person/vehicle recall。保留 v9.1 base 作为当前精度恢复候选，直到真正的公开数据扩充可用。
 
-## Class Mapping
+## 类别映射
 
-BSD classes:
+BSD 类别：
 
-| ID | Name |
+| ID | 名称 |
 |---:|---|
 | 0 | `person` |
 | 1 | `bicycle` |
 | 2 | `motorcycle` |
 | 3 | `vehicle` |
 
-Source mapping:
+来源映射：
 
-| Source label | BSD label | Notes |
+| 来源标签 | BSD 标签 | 说明 |
 |---|---|---|
-| `person`, `pedestrian`, `adult`, `child`, `people` | `person` | `rider` is mapped to `person` unless a later importer can split rider and vehicle boxes cleanly |
-| `bicycle`, `bike` | `bicycle` | Include e-bike if the source has that class |
-| `motorcycle`, `motorbike`, `motor`, `scooter` | `motorcycle` | `tricycle` needs visual review before deciding motorcycle vs vehicle |
-| `car`, `bus`, `truck`, `van`, `lorry`, `pickup` | `vehicle` | Keep train/trailer/caravan disabled by default unless the deployment scene needs them |
+| `person`, `pedestrian`, `adult`, `child`, `people` | `person` | `rider` 默认映射为 `person`，除非后续 importer 能干净拆出 rider 和 vehicle 框 |
+| `bicycle`, `bike` | `bicycle` | 源数据有 e-bike 时纳入 |
+| `motorcycle`, `motorbike`, `motor`, `scooter` | `motorcycle` | `tricycle` 需要视觉复核后再定 motorcycle vs vehicle |
+| `car`, `bus`, `truck`, `van`, `lorry`, `pickup` | `vehicle` | 默认不启用 train/trailer/caravan，除非部署场景需要 |
 
-## Data Mix Rules
+## 数据混合规则
 
-The goal is to improve `YOLO26n@640` precision without destroying road-scene
-recall. Smaller input sizes are fallback options, not the main accuracy route.
+目标是提升 `YOLO26n@640` 精度，同时不破坏道路场景 recall。更小输入是兜底，不是主精度路线。
 
-| Rule | Default |
+| 规则 | 默认 |
 |---|---|
-| Keep all high-quality `person`, `bicycle`, `motorcycle` samples | Yes |
-| Downsample vehicle-only public images | Yes |
-| Hard negative empty images | 5% to 12% of training images |
-| Max single-source share after COCO/BDD base | 35% unless reviewed |
-| Use validation data for training | No |
-| Use old abnormal board raw frames for accuracy conclusion | No |
-| Use board debug frames for quantization/link debug | Yes |
+| 保留全部高质量 `person`, `bicycle`, `motorcycle` 样本 | 是 |
+| 对纯 vehicle 公开图降采样 | 是 |
+| hard negative empty images | 训练图的 5% 到 12% |
+| COCO/BDD base 之后单一新增来源最大占比 | 35%，除非人工复核 |
+| 使用验证集训练 | 否 |
+| 用旧异常板端 raw 帧做精度结论 | 否 |
+| 用 board debug frames 做量化/链路调试 | 是 |
 
-Before training a public-data candidate, write a `manifest.json` with:
+训练公开数据候选前，必须写入 `manifest.json`：
 
-- source name and version;
-- source image count;
-- copied/linked image count;
-- empty-label count;
-- per-class object count;
-- filter parameters;
-- train/val split policy.
+- 来源名称和版本；
+- 来源图片数；
+- 复制/硬链接图片数；
+- 空标签数；
+- 逐类目标数；
+- 过滤参数；
+- train/val 划分策略。
 
-## Current Deployed Candidate
+## 当前部署候选
 
-| Item | Value |
+| 项目 | 值 |
 |---|---|
-| Candidate | `bsd_v7_yolo26n_640_public_kitti` |
-| Model | `YOLO26n@640` |
-| Dataset | `bsd_v6_public_kitti` |
-| BDD proxy metrics | P `0.682`, R `0.615`, mAP50 `0.674`, mAP50-95 `0.467` |
-| Quantized NB size | `3,696,064` bytes, about `3.52 MiB` |
-| Board result | `headless` about 15 FPS; `preview` about 7.7 FPS |
-| Detail record | `docs/candidates/bsd_v7_yolo26n_640_public_kitti.md` |
+| 候选 | `bsd_v9p1_yolo26n_noattn_relu_640_pv_priority` |
+| 模型 | `YOLO26n_noattn + ReLU + 640` |
+| 数据集 | `bsd_v9p1_pv_priority` |
+| BDD proxy 指标 | P `0.720`, R `0.602`, mAP50 `0.677`, PV Recall `0.760`, PV mAP50 `0.797` |
+| 量化 NB 大小 | `2,111,168` bytes，约 `2.01 MiB` |
+| 板端结果 | headless detect call 约 `48.7-49.0 ms`，NPU 约 `31.7-31.8 ms`；preview 约 `9.4-9.5 FPS` |
+| 详细记录 | `docs/candidates/bsd_v9p1_pv_priority_plan.md` |
 
-## Current Speed Experiment
+## 当前速度背景
 
-The v7 candidate is frozen as the comparison baseline. The current speed
-experiment keeps `640x640` and the YOLO26 raw-logit board decode path, but
-removes C2PSA attention blocks from the model graph.
+v7 保留为稳定回退。v8 证明了移除 attention 能显著改善 VIPLite 图；v9/v9.1 进一步把激活函数换成 ReLU，并把 NPU 耗时压到约 `31-32 ms`。
 
-| Item | Value |
-|---|---|
-| Candidate | `bsd_v8_yolo26n_noattn_640_stage1` |
-| Model YAML | `training/detection/models/yolo26n_noattn.yaml` |
-| Detail record | `docs/candidates/bsd_v8_yolo26n_noattn_640.md` |
-| Probe NB size | `1.69 MiB` |
-| Probe board NPU | `62.8-62.9 ms` |
+| 候选 | 作用 | 板端 NPU | 说明 |
+|---|---|---:|---|
+| v7 `YOLO26n@640` | 稳定回退 | 约 `92.1 ms` | recall 强，但速度慢 |
+| v8 no-attn SiLU | attention 移除验证 | 约 `67.4 ms` | 速度提升，recall 略降 |
+| v9 ReLU from v8 | ReLU 速度验证 | 约 `31.3 ms` | 速度最佳，PV Recall `0.741` |
+| v9.1 base | 当前优先候选 | 约 `31.7-31.8 ms` | PV Recall 提升到 `0.760` |
 
-The speed probe used untrained/random weights and is not an accuracy result.
-Train and evaluate v8 before using it for any detection comparison.
+preview 慢主要是 framebuffer 转换、旋转/缩放、画框和 page flip，不代表 NPU 慢。真实性能判断以 `headless` 为准。
 
-## Immediate Implementation Order
+## 即时实施顺序
 
-1. Import BDD100K official detection labels to BSD YOLO format.
-2. Build `bsd_v6_public_precision` from `bsd_v5_balanced` plus reviewed BDD official data.
-3. Compare class/object distribution against `bsd_v5_balanced`.
-4. Train or fine-tune `YOLO26n@640` first; only try `512/416` if board throughput forces it.
-5. Evaluate against `coco_val` and `bdd_proxy_val`, then generate fixed visual comparisons against v4.
-6. Only if PC metrics and visual checks pass the acceptance target, export/quantize and test on board.
+1. 保持 v9.1 base 为当前板端候选，v7 为稳定回退。
+2. 搜罗并下载 CityPersons/EuroCity 等公开 person-heavy 道路数据。
+3. 先做 importer 和 manifest，确认 person/vehicle 分布变好。
+4. 构建 `bsd_v9p2_public_expand`，从 v9.1 base 微调。
+5. 在 `coco_val`、`bdd_proxy_val` 和固定可视化对比上验证。
+6. 只有 PC 指标和可视化通过，才 export/quantize 并上板 `live_bsd headless`。
 
-## Stop Conditions
+## 停止条件
 
-Pause and inspect data if any candidate shows:
+候选出现以下情况时暂停并检查数据：
 
-- `coco_val` precision drops more than 0.05 from v4 while BDD improves only slightly;
-- `person` recall drops on both `coco_val` and `bdd_proxy_val`;
-- vehicle-only images dominate the new dataset;
-- visual comparison shows repeated large false-positive boxes;
-- `n@640` loses the BDD proxy gains after adding new public data;
-- a smaller fallback such as `n@512` trails v4 by a large margin after BDD official data is added.
+- `coco_val` precision 比 v4 下降超过 0.05，而 BDD 提升很小；
+- `person` recall 在 `coco_val` 和 `bdd_proxy_val` 上都下降；
+- 纯 vehicle 图主导新增数据；
+- 可视化对比出现反复大框误检；
+- 新公开数据加入后 `n@640` 丢失 BDD proxy 收益；
+- 512 等更小兜底模型在加入 BDD official 后仍明显落后 v4。

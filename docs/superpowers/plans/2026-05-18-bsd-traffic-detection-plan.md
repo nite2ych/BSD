@@ -1,16 +1,16 @@
 # BSD 交通参与方检测报警系统 — 实现计划
 
-> **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
+> **给自动化开发代理的说明：** 推荐使用 `superpowers:subagent-driven-development`，或使用 `superpowers:executing-plans` 按任务逐步实现。步骤使用 checkbox（`- [ ]`）跟踪。
 
-**Goal:** 在 V853 板端构建 YOLO26s 4 分类检测引擎 + 矩形区域报警引擎，提供 .so 库供调用方进程使用。
+**目标：** 在 V853 板端构建 YOLO26s 4 分类检测引擎 + 矩形区域报警引擎，提供 .so 库供调用方进程使用。
 
-**Architecture:** 两个 .so 库分层：`libdetect_engine.so` 负责视频采集+NPU推理+解码，结果写入共享内存；`libalarm_engine.so` 读取检测结果，执行 overlap 比例判定+连续帧计数+报警回调。调用方链接 libalarm_engine.so。
+**架构：** 两个 .so 库分层：`libdetect_engine.so` 负责视频采集+NPU推理+解码，结果写入共享内存；`libalarm_engine.so` 读取检测结果，执行 overlap 比例判定+连续帧计数+报警回调。调用方链接 libalarm_engine.so。
 
-**Tech Stack:** C11 (板端), Python (训练/量化), Allwinner V853 NPU (VIP9000PICO), awNN SDK, YOLO26s
+**技术栈：** C11 (板端), Python (训练/量化), Allwinner V853 NPU (VIP9000PICO), awNN SDK, YOLO26s
 
 ---
 
-## File Map
+## 文件地图
 
 | 文件 | 职责 |
 |------|------|
@@ -32,10 +32,10 @@
 
 ---
 
-### Task 1: 共享数据结构定义
+### 任务 1：共享数据结构定义
 
-**Files:**
-- Create: `deployment/board/common/types.h`
+**文件：**
+- 新建：`deployment/board/common/types.h`
 
 - [ ] **Step 1: 创建共享类型头文件**
 

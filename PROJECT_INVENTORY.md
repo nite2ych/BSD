@@ -1,45 +1,45 @@
-# BSD Project Inventory
+# BSD 工程清单
 
-This file separates the current project into maintainable source, local generated artifacts, and experimental scripts.
+本文档把当前工程拆成可维护源码、本地生成产物和实验脚本，方便后续接管开发和提交管理。
 
-## Maintainable Core
+## 可维护核心
 
-These files/directories are the main code and documentation that should generally stay under version control:
+这些文件和目录是主线代码与文档，通常应保留在版本控制中：
 
-| Path | Role |
+| 路径 | 作用 |
 |---|---|
-| `README.md` | Project entry point |
-| `BSD_DEV_GUIDE.md` | Main development manual |
-| `DEPLOYMENT_GUIDE.md` | Historical V853/DMS deployment reference |
-| `deployment/board/BOARD_ENGINE.md` | Board-side engine reference |
-| `deployment/board/common/` | Shared ABI types |
-| `deployment/board/detect_engine/` | Detection engine and realtime `live_bsd` pipeline |
-| `deployment/board/alarm_engine/` | Zone, tracker, and alarm engine |
-| `deployment/board/test_v4/` | Board-side test code |
-| `deployment/dataset/` | Dataset conversion/preparation scripts |
-| `deployment/quantize/` | ONNX split and calibration scripts |
-| `examples/` | Integration examples |
-| `training/detection/configs/` | Training configs |
+| `README.md` | 工程入口 |
+| `BSD_DEV_GUIDE.md` | 主开发手册 |
+| `DEPLOYMENT_GUIDE.md` | V853/DMS 历史部署参考 |
+| `deployment/board/BOARD_ENGINE.md` | 板端引擎参考 |
+| `deployment/board/common/` | 共用 ABI 类型 |
+| `deployment/board/detect_engine/` | 检测引擎和实时 `live_bsd` 链路 |
+| `deployment/board/alarm_engine/` | 区域、跟踪和报警引擎 |
+| `deployment/board/test_v4/` | 板端模型测试代码 |
+| `deployment/dataset/` | 数据集转换/准备脚本 |
+| `deployment/quantize/` | ONNX 拆分和校准脚本 |
+| `examples/` | 集成示例 |
+| `training/detection/configs/` | 训练配置 |
 
-## Candidate Source To Review
+## 待确认源码
 
-These are currently untracked but look like source or useful tooling. Review before adding them to Git:
+这些内容看起来是源码或有用工具，但提交前需要逐个确认，避免把临时脚本、主机信息或密码带进仓库：
 
-| Path | Notes |
+| 路径 | 说明 |
 |---|---|
-| `deployment/board/detect_engine/live_bsd.c` | Realtime camera/NPU/framebuffer pipeline |
-| `deployment/board/detect_engine/awnn.h` | Local AWNN declarations needed for board build |
-| `deployment/board/detect_engine/test_npu_direct.c` | Direct NPU smoke test |
-| `deployment/board/detect_engine/*.sh` | Board build helper scripts |
-| `deployment/board/compile_live.py` | Upload and compile `live_bsd` remotely |
-| `deployment/board/check_camera.py` | Board camera diagnostic helper |
-| `deployment/board/test_bdd100k/` | BDD100K board test |
-| `deployment/quantize/prepare_calibration_data.py` | Calibration image generator |
-| `deployment/quantize/split_yolo_head_sig.py` | Sigmoid-output split experiment |
-| `tools/` | PC, SSH, validation, and quantization helpers |
-| `training/detection/configs/bsd_yolo26s*.yaml` | BSD training configs |
+| `deployment/board/detect_engine/live_bsd.c` | 实时 camera/NPU/framebuffer 链路 |
+| `deployment/board/detect_engine/awnn.h` | 板端编译需要的本地 AWNN 声明 |
+| `deployment/board/detect_engine/test_npu_direct.c` | NPU 直连冒烟测试 |
+| `deployment/board/detect_engine/*.sh` | 板端编译辅助脚本 |
+| `deployment/board/compile_live.py` | 远程上传并编译 `live_bsd` |
+| `deployment/board/check_camera.py` | 板端摄像头诊断辅助脚本 |
+| `deployment/board/test_bdd100k/` | BDD100K 板端测试 |
+| `deployment/quantize/prepare_calibration_data.py` | 校准图生成器 |
+| `deployment/quantize/split_yolo_head_sig.py` | sigmoid 输出拆分实验 |
+| `tools/` | PC、SSH、验证和量化辅助工具 |
+| `training/detection/configs/bsd_yolo26s*.yaml` | BSD 训练配置 |
 
-Suggested first add set:
+建议优先纳入版本控制的集合：
 
 ```text
 README.md
@@ -56,7 +56,7 @@ deployment/quantize/split_yolo_head_sig.py
 training/detection/configs/
 ```
 
-Review before adding:
+提交前继续人工检查：
 
 ```text
 tools/
@@ -65,27 +65,27 @@ root-level *.py scripts
 DEBUG_RECORD.md
 ```
 
-The review bucket contains useful debugging history, but many files contain hardcoded machine paths, hostnames, or credentials.
+待检查集合里有有用的调试历史，但不少文件包含硬编码机器路径、主机名或凭据。
 
-## Local Artifacts
+## 本地产物
 
-These are intentionally ignored and should not be committed:
+这些内容刻意被忽略，不应提交：
 
-| Path/Pattern | Contents |
+| 路径/模式 | 内容 |
 |---|---|
-| `artifacts/` | Models, NB files, board binaries, test frames, calibration images |
-| `_toolchain/` | SDK/toolchain cache |
-| `*.pt`, `*.onnx`, `*.nb`, `*.raw` | Model and validation artifacts |
-| `*.o`, `*.so`, board executables | Build outputs |
-| `__pycache__/` | Python cache |
+| `artifacts/` | 模型、NB 文件、板端二进制、测试帧、校准图 |
+| `_toolchain/` | SDK/工具链缓存 |
+| `*.pt`, `*.onnx`, `*.nb`, `*.raw` | 模型和验证产物 |
+| `*.o`, `*.so`, board executables | 编译输出 |
+| `__pycache__/` | Python 缓存 |
 
-## Experimental And Cleanup Candidates
+## 实验脚本和清理候选
 
-The root directory contains many one-off server/model scripts such as `check_server.py`, `download_v4_model.py`, `quick_val.py`, and `test_pt_model.py`. They may still be useful, but they duplicate scripts under `tools/` and often contain hardcoded hosts or credentials.
+根目录有很多一次性服务器/模型脚本，例如 `check_server.py`、`download_v4_model.py`、`quick_val.py`、`test_pt_model.py`。它们可能仍有参考价值，但与 `tools/` 下脚本重复，并且经常包含硬编码主机或凭据。
 
-Recommended cleanup path:
+建议清理路径：
 
-1. Keep reusable scripts under `tools/`.
-2. Move one-off scripts to `tools/experiments/` or delete them after confirming they are obsolete.
-3. Replace hardcoded credentials with environment variables.
-4. Keep generated outputs under `artifacts/`.
+1. 可复用脚本统一放到 `tools/`。
+2. 一次性脚本移到 `tools/experiments/`，或确认废弃后删除。
+3. 硬编码凭据改成环境变量。
+4. 生成输出统一放到 `artifacts/`。

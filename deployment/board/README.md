@@ -1,48 +1,46 @@
-# Board-Side Code
+# 板端代码
 
-V853 board-side source for the BSD detector and alarm pipeline.
+V853 板端 BSD 检测和报警链路源码。
 
-| Path | Purpose |
+| 路径 | 用途 |
 |---|---|
-| `common/` | Shared C ABI types used by detect and alarm engines |
-| `detect_engine/` | AWNN model loading, preprocessing, YOLO decode, NMS, shared-memory output |
-| `alarm_engine/` | Zone hit testing, IOU tracking, short hold, smoothing, cooldown, consecutive-frame alarm logic |
-| `test_v4/` | Board-side model test code |
-| `test_bdd100k/` | BDD100K board test code, currently untracked |
-| `camera/` | Camera bring-up and debugging scripts, currently experimental |
+| `common/` | 检测和报警引擎共用的 C ABI 类型 |
+| `detect_engine/` | AWNN 模型加载、预处理、YOLO 解码、NMS、共享内存输出 |
+| `alarm_engine/` | 区域命中、IOU 跟踪、短暂保持、平滑、冷却、连续帧报警逻辑 |
+| `test_v4/` | 板端模型测试代码 |
+| `test_bdd100k/` | BDD100K 板端测试代码，当前默认不跟踪 |
+| `camera/` | 摄像头 bring-up 和调试脚本，当前仍属实验目录 |
 
-Main entry points:
+主要入口：
 
-| File | Purpose |
+| 文件 | 用途 |
 |---|---|
-| `detect_engine/main.c` | stdin BGR raw test runner, builds as `bsd_detect` |
-| `detect_engine/live_bsd.c` | realtime V4L2 camera -> NPU -> framebuffer runner |
-| `detect_engine/test_npu_direct.c` | raw BGR file -> NB/NPU direct comparison runner |
-| `compile_engines.py` | legacy remote build helper |
-| `compile_live.py` | remote build helper for `live_bsd` and `test_npu_direct`, currently untracked |
+| `detect_engine/main.c` | stdin BGR raw 测试程序，编译为 `bsd_detect` |
+| `detect_engine/live_bsd.c` | 实时 V4L2 camera -> NPU -> framebuffer 程序 |
+| `detect_engine/test_npu_direct.c` | raw BGR 文件 -> NB/NPU 直连对比测试程序 |
+| `compile_engines.py` | 旧版远程编译辅助脚本 |
+| `compile_live.py` | `live_bsd` 和 `test_npu_direct` 远程编译辅助脚本，当前默认不跟踪 |
 
-Generated objects, shared libraries, board executables, and copied SDK libraries are ignored by Git.
+生成的 object、动态库、板端可执行文件和复制出来的 SDK 库默认被 Git 忽略。
 
-## Video Reliability Layer
+## 视频可靠性层
 
-Model output is single-frame detection. The BSD runtime adds a lightweight
-video reliability layer in `alarm_engine` before emitting alarms:
+模型输出是单帧检测结果。BSD 运行时在输出报警前，通过 `alarm_engine` 增加一层轻量视频可靠性处理：
 
-| Step | Purpose | Default |
+| 步骤 | 用途 | 默认值 |
 |---|---|---|
-| Zone hit test | Only alarm inside configured blind-zone ROIs | zone 0 center, zone 1 full frame |
-| IoU association | Keep a target identity across frames | `match_iou=0.30` |
-| BBox smoothing | Reduce box jitter before zone/alarm output | `smooth_alpha=0.65` |
-| Consecutive confirmation | Avoid one-frame false alarms | `alarm_frames=3` |
-| Short hold | Survive brief detector misses | `max_missed=3` |
-| Cooldown | Suppress repeated alarms after leaving ROI | `cooldown=15` |
-| Re-emit interval | Repeat long active alarms at controlled rate | `reemit=15` |
-| Class enable mask | Control which classes can alarm | person/bicycle/motorcycle/vehicle enabled in `live_bsd`; vehicle can be disabled |
+| 区域命中 | 只在配置的盲区 ROI 内报警 | zone 0 中心区域，zone 1 全画面 |
+| IoU 关联 | 跨帧保持目标身份 | `match_iou=0.30` |
+| BBox 平滑 | 在区域/报警输出前降低框抖动 | `smooth_alpha=0.65` |
+| 连续确认 | 避免单帧误报 | `alarm_frames=3` |
+| 短暂保持 | 承受检测器短暂漏检 | `max_missed=3` |
+| 冷却 | 目标离开 ROI 后抑制重复报警 | `cooldown=15` |
+| 重复上报间隔 | 长时间活跃报警按固定节奏重复上报 | `reemit=15` |
+| 类别开关 | 控制哪些类别允许报警 | `live_bsd` 默认 person/bicycle/motorcycle/vehicle 全开；vehicle 可关闭 |
 
-`DetResult` and `AlarmEvent` ABI are unchanged. The reliability layer is
-configured through `alarm_set_tracker_params()` and `alarm_set_class_enabled()`.
+`DetResult` 和 `AlarmEvent` ABI 不变。可靠性层通过 `alarm_set_tracker_params()` 和 `alarm_set_class_enabled()` 配置。
 
-`live_bsd` keeps old arguments compatible and appends optional alarm parameters:
+`live_bsd` 保持旧参数兼容，并在末尾追加可选报警参数：
 
 ```sh
 /mnt/UDISK/live_bsd /mnt/UDISK/bsd_v9_relu_from_v8_640.nb \
@@ -50,11 +48,10 @@ configured through `alarm_set_tracker_params()` and `alarm_set_class_enabled()`.
   3 3 15 15 0.65 1
 ```
 
-The last six values are:
+最后 6 个值含义：
 
 ```text
 alarm_frames max_missed cooldown reemit smooth_alpha vehicle_alarm
 ```
 
-For early board tests, keep `alarm_frames=3` and `max_missed=3`. Increase
-`alarm_frames` only if false alarms remain after ROI tuning.
+早期板端测试建议保持 `alarm_frames=3` 和 `max_missed=3`。只有在 ROI 调整后仍有误报时，再提高 `alarm_frames`。

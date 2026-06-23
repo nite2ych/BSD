@@ -1,4 +1,4 @@
-# BSD Board-Side Engine
+# BSD 板端引擎
 
 V853 板端盲区检测系统工程文档，提交 `0ed8c18`。
 
@@ -13,13 +13,13 @@ Camera (BGR interleaved)
 │  detect_process_frame()      │
 │                              │
 │  BGR → letterbox → RGB planar│
-│  NPU inference (AWNN)        │
-│  YOLO decode (LTRB + sigmoid)│
-│  NMS (per-class greedy IOU)  │
-│  Coordinate remap + clip     │
+│  NPU 推理 (AWNN)             │
+│  YOLO 解码 (LTRB + sigmoid)  │
+│  NMS (按类 greedy IOU)       │
+│  坐标映射 + 裁剪             │
 │        │                     │
 │        ▼                     │
-│  Shared memory               │
+│  共享内存                    │
 │  DetResult [/bsd_detect_shm] │
 └──────────────┬───────────────┘
                │
@@ -29,8 +29,8 @@ Camera (BGR interleaved)
 │  alarm_loop()                │
 │                              │
 │  读取共享内存                 │
-│  Zone hit test (3层区域)      │
-│  Multi-target tracker (IOU)  │
+│  区域命中测试 (3层区域)      │
+│  多目标跟踪 (IOU)            │
 │  连续帧计数 → 触发回调        │
 └──────────────────────────────┘
 ```
@@ -98,7 +98,7 @@ cat /mnt/UDISK/test_1920x1080.raw | /mnt/UDISK/bsd_detect /mnt/UDISK/bsd_v4_640.
 ## 数据流详解
 
 ### 输入
-- **格式**: BGR interleaved, uint8, `cam_width × cam_height × 3` bytes
+- **格式**: BGR interleaved，uint8，`cam_width × cam_height × 3` bytes
 - **来源**: V4L2 摄像头 / raw 文件 / pipe
 
 ### 预处理 (preprocess.c)
@@ -108,13 +108,13 @@ cat /mnt/UDISK/test_1920x1080.raw | /mnt/UDISK/bsd_detect /mnt/UDISK/bsd_v4_640.
 
 ### NPU 推理 (detect_engine.c)
 - **API**: `awnn_init` → `awnn_create` → `awnn_set_input_buffers` → `awnn_run` → `awnn_get_output_buffers`
-- **模型**: bsd_v4_640.nb (YOLO11s, 4类, 640×640, uint8 量化)
-- **输出**: `boxes[4×8400]` (float, LTRB distances in grid-cell units), `scores[4×8400]` (float, raw logit)
+- **模型**: bsd_v4_640.nb（YOLO11s，4 类，640×640，uint8 量化）
+- **输出**: `boxes[4×8400]`（float，LTRB distances，单位为 grid cell），`scores[4×8400]`（float，raw logit）
 
 ### 解码 (yolo_decode.c)
 1. 逐 cell 扫描: logit → sigmoid, 找最佳类别
 2. conf > threshold → 按 stride 8/16/32 将 LTRB distance 解码为 x1/y1/x2/y2
-3. 按 conf 排序, 贪婪 NMS (per-class, IOU > nms_thr → 抑制)
+3. 按 conf 排序，贪婪 NMS（按类别，IOU > nms_thr 时抑制）
 4. 紧凑化: 有效检测移到数组前部
 
 ### 坐标映射 (detect_engine.c)

@@ -1,33 +1,31 @@
-# BSD v8 YOLO26n No-Attention 640 Candidate
+# BSD v8 YOLO26n No-Attention 640 候选
 
-This is the speed-route experiment. It does not replace the v7 deployed
-baseline.
+这是速度路线实验，不替代 v7 已部署稳定基线。
 
-## Baseline Rule
+## 基线规则
 
-Keep v7 unchanged for comparison:
+保持 v7 不变用于对比：
 
-| Item | Value |
+| 项目 | 值 |
 |---|---|
-| Baseline candidate | `bsd_v7_yolo26n_640_public_kitti` |
-| Board NB | `/mnt/UDISK/bsd_v7_yolo26n_640.nb` |
-| Baseline NPU | about `92.1 ms` |
-| Baseline NB | `3.52 MiB` |
+| 基线候选 | `bsd_v7_yolo26n_640_public_kitti` |
+| 板端 NB | `/mnt/UDISK/bsd_v7_yolo26n_640.nb` |
+| 基线 NPU | 约 `92.1 ms` |
+| 基线 NB | `3.52 MiB` |
 
-## Model Change
+## 模型变化
 
-v8 keeps the YOLO26 input/output convention but removes the attention block that
-created bad NPU ops.
+v8 保持 YOLO26 输入/输出约定，但移除了会产生低效 NPU 算子的 attention block。
 
-| Item | Value |
+| 项目 | 值 |
 |---|---|
-| Model YAML | `training/detection/models/yolo26n_noattn.yaml` |
-| Train config | `training/detection/configs/bsd_v8_yolo26n_noattn_640_stage1.yaml` |
-| Input | `640x640` |
-| Detect head | YOLO26, `reg_max=1`, raw-logit split compatible |
-| ABI | No `DetResult` / `AlarmEvent` change |
+| 模型 YAML | `training/detection/models/yolo26n_noattn.yaml` |
+| 训练配置 | `training/detection/configs/bsd_v8_yolo26n_noattn_640_stage1.yaml` |
+| 输入 | `640x640` |
+| 检测头 | YOLO26，`reg_max=1`，兼容 raw-logit split |
+| ABI | 不改 `DetResult` / `AlarmEvent` |
 
-The original v7 graph contains attention/layout-heavy ops:
+原 v7 图包含 attention/layout-heavy 算子：
 
 ```text
 MATRIXMUL 4
@@ -35,7 +33,7 @@ SOFTMAX 2
 PERMUTE 4
 ```
 
-The v8 no-attention probe graph removes them:
+v8 no-attention probe 图移除了这些算子：
 
 ```text
 CONV2D 104
@@ -48,55 +46,49 @@ POOL 3
 RESIZE 2
 ```
 
-## Speed Probe
+## 速度 Probe
 
-The probe was exported from random/untrained weights only to measure board
-runtime. Do not use it for accuracy.
+probe 由随机/未训练权重导出，只用于测板端耗时，不用于精度判断。
 
-| Variant | NB size | Simulator | V853 board NPU | Detection total |
+| 变体 | NB 大小 | 模拟器 | V853 板端 NPU | 检测总耗时 |
 |---|---:|---:|---:|---:|
 | v7 `YOLO26n@640` | `3.52 MiB` | `18.49 ms` | `92.1 ms` | `109.3 ms` |
 | v8 no-attn probe | `1.69 MiB` | `14.66 ms` | `62.8-62.9 ms` | `79.8-80.0 ms` |
 
-This is a real speed improvement at fixed `640x640`, but not yet the `~50 ms`
-target. It is worth training because it preserves the board decode path and
-stays far below the `<5 MB` NB limit.
+这是在固定 `640x640` 下的真实速度提升，但尚未达到 `~50 ms` 目标。它值得训练，因为保留了板端解码路径，并且明显低于 `<5 MB` NB 限制。
 
-## Trained Stage1 Result
+## 已训练 Stage1 结果
 
-Training completed with early stopping at epoch 78. Best epoch was 48. The
-model was initialized from the v7 public-KITTI weights, with
-`635/720` weight items transferred.
+训练在 epoch 78 early stop，最佳 epoch 为 48。模型从 v7 public-KITTI 权重初始化，转移了 `635/720` 个权重项。
 
-| Validation set | Model | P | R | mAP50 | mAP50-95 |
+| 验证集 | 模型 | P | R | mAP50 | mAP50-95 |
 |---|---:|---:|---:|---:|---:|
 | `coco_val` | v7 `n@640` | 0.741 | 0.521 | 0.586 | 0.364 |
 | `coco_val` | v8 no-attn `n@640` | 0.739 | 0.506 | 0.577 | 0.361 |
 | `bdd_proxy_val` | v7 `n@640` | 0.682 | 0.615 | 0.674 | 0.467 |
 | `bdd_proxy_val` | v8 no-attn `n@640` | 0.744 | 0.589 | 0.680 | 0.473 |
 
-Interpretation:
+解读：
 
-- v8 is slightly worse on `coco_val`.
-- v8 is slightly better on `bdd_proxy_val` mAP, which is more relevant to BSD.
-- v8 recall drops on `bdd_proxy_val` by about `0.026`, so v7 remains the
-  fallback until board-side validation exists.
+- v8 在 `coco_val` 上略低于 v7。
+- v8 在更贴近 BSD 道路场景的 `bdd_proxy_val` mAP 上略高。
+- v8 在 `bdd_proxy_val` recall 上下降约 `0.026`，因此在没有板端验证集前，v7 仍是回退模型。
 
-## Trained Quantization
+## 已训练量化
 
-| Artifact | Value |
+| 产物 | 值 |
 |---|---|
 | PT | `artifacts/bsd_v8_yolo26n_noattn_640_stage1/weights/best.pt` |
 | ONNX | `artifacts/bsd_v8_yolo26n_noattn_640_stage1/weights/best.onnx` |
-| Split ONNX | `artifacts/bsd_v8_yolo26n_noattn_640_stage1/best_640_split_nosig.onnx` |
+| 拆分 ONNX | `artifacts/bsd_v8_yolo26n_noattn_640_stage1/best_640_split_nosig.onnx` |
 | NB | `artifacts/bsd_v8_yolo26n_noattn_640_stage1/bsd_v8_yolo26n_noattn_640_stage1.nb` |
-| Board NB | `/mnt/UDISK/bsd_v8_yolo26n_noattn_640.nb` |
-| NB size | `3,598,080` bytes, about `3.43 MiB` |
+| 板端 NB | `/mnt/UDISK/bsd_v8_yolo26n_noattn_640.nb` |
+| NB 大小 | `3,598,080` bytes，约 `3.43 MiB` |
 | NB MD5 | `ca0667ef858073ec9e93f0cb8b7c23f3` |
 | NB magic | `VPMN` |
-| Hard size gate | Passes `<5 MB` |
+| 硬性大小门槛 | 满足 `<5 MB` |
 
-Trained split ONNX operator check:
+已训练拆分 ONNX 算子检查：
 
 ```text
 Conv 104
@@ -113,7 +105,7 @@ Softmax 0
 Transpose 0
 ```
 
-Pegasus fused graph:
+Pegasus 融合图：
 
 ```text
 CONV2D 104
@@ -126,32 +118,30 @@ POOL 3
 RESIZE 2
 ```
 
-Pegasus simulator after export:
+Pegasus 导出后模拟器：
 
 ```text
 Run the 1 time: 17.12 ms
 ```
 
-## Board Result
+## 板端结果
 
-Measured on V853 with the same `bench_npu_loop` and `live_bsd headless`
-procedure as v7. The v7 NB remains deployed separately as
-`/mnt/UDISK/bsd_v7_yolo26n_640.nb`.
+在 V853 上使用与 v7 相同的 `bench_npu_loop` 和 `live_bsd headless` 流程测试。v7 NB 仍单独保留为 `/mnt/UDISK/bsd_v7_yolo26n_640.nb`。
 
-| Variant | NB size | Continuous benchmark | `live_bsd headless` detection total | `live_bsd headless` NPU |
+| 变体 | NB 大小 | 连续 benchmark | `live_bsd headless` 检测总耗时 | `live_bsd headless` NPU |
 |---|---:|---:|---:|---:|
-| v7 `YOLO26n@640` | `3.52 MiB` | `91.66 ms` NPU, `9.83 FPS` | about `109.2 ms` | about `92.1 ms` |
-| v8 no-attn trained | `3.43 MiB` | `67.28 ms` NPU, `12.93 FPS` | about `84.5 ms` | about `67.4 ms` |
+| v7 `YOLO26n@640` | `3.52 MiB` | `91.66 ms` NPU，`9.83 FPS` | 约 `109.2 ms` | 约 `92.1 ms` |
+| v8 no-attn trained | `3.43 MiB` | `67.28 ms` NPU，`12.93 FPS` | 约 `84.5 ms` | 约 `67.4 ms` |
 
-Speed delta:
+速度变化：
 
-- NPU time improves from about `92.1 ms` to about `67.4 ms`.
-- Detection-call total improves from about `109.2 ms` to about `84.5 ms`.
-- This is about a `26-27%` board-side NPU reduction at fixed `640x640`.
+- NPU 耗时从约 `92.1 ms` 降到约 `67.4 ms`。
+- detection-call 总耗时从约 `109.2 ms` 降到约 `84.5 ms`。
+- 在固定 `640x640` 下，板端 NPU 下降约 `26-27%`。
 
-## Commands
+## 命令
 
-Train and evaluate:
+训练和评估：
 
 ```bash
 python training/detection/run_bsd_candidate.py \
@@ -160,7 +150,7 @@ python training/detection/run_bsd_candidate.py \
   --device 0
 ```
 
-After training, export and split:
+训练后导出并拆分：
 
 ```bash
 python training/detection/run_bsd_candidate.py \
@@ -174,7 +164,7 @@ python deployment/quantize/split_yolo_head.py \
   --output artifacts/bsd_v8_yolo26n_noattn_640_stage1/best_640_split_nosig.onnx
 ```
 
-Quantize:
+量化：
 
 ```bash
 python tools/quantize_bsd_candidate.py \
@@ -188,21 +178,19 @@ python tools/quantize_bsd_candidate.py \
   --model-size 640
 ```
 
-## Quantization Matrix Follow-Up
+## 量化矩阵补充
 
-After the activation experiments failed to preserve accuracy, v8 was retested
-with low-risk Pegasus quantization/export variants. These do not change the
-trained PT weights.
+激活函数实验未能保住精度后，v8 又测试了一组低风险 Pegasus 量化/导出变体。这些测试不改变已训练 PT 权重。
 
-| Variant | Local NB | NB size | Pegasus simulator | Result |
+| 变体 | 本地 NB | NB 大小 | Pegasus 模拟器 | 结果 |
 |---|---|---:|---:|---|
-| standard `asymmetric_affine` | `artifacts/bsd_v8_yolo26n_noattn_640_stage1/bsd_v8_yolo26n_noattn_640_stage1.nb` | `3,598,080` bytes | `17.12 ms` | Current best |
-| `moving_average` algorithm | `artifacts/bsd_v8_yolo26n_noattn_640_stage1/bsd_v8_yolo26n_noattn_640_stage1_mavg.nb` | `3,598,080` bytes | `17.28 ms` | No speed gain |
-| `kl_divergence` algorithm | `artifacts/bsd_v8_yolo26n_noattn_640_stage1/bsd_v8_yolo26n_noattn_640_stage1_kl.nb` | `3,598,080` bytes | `17.88 ms` | Slower |
-| `perchannel_symmetric_affine int8` | `artifacts/bsd_v8_yolo26n_noattn_640_stage1/bsd_v8_yolo26n_noattn_640_stage1_perch_int8.nb` | `4,427,776` bytes | `23.66 ms` | Slower, larger |
-| sigmoid score output | `artifacts/bsd_v8_yolo26n_noattn_640_stage1/bsd_v8_yolo26n_noattn_640_stage1_sig_v2.nb` | `3,602,752` bytes | `17.64 ms` | No speed gain; decoder change required |
+| standard `asymmetric_affine` | `artifacts/bsd_v8_yolo26n_noattn_640_stage1/bsd_v8_yolo26n_noattn_640_stage1.nb` | `3,598,080` bytes | `17.12 ms` | 当前最好 |
+| `moving_average` algorithm | `artifacts/bsd_v8_yolo26n_noattn_640_stage1/bsd_v8_yolo26n_noattn_640_stage1_mavg.nb` | `3,598,080` bytes | `17.28 ms` | 无速度收益 |
+| `kl_divergence` algorithm | `artifacts/bsd_v8_yolo26n_noattn_640_stage1/bsd_v8_yolo26n_noattn_640_stage1_kl.nb` | `3,598,080` bytes | `17.88 ms` | 更慢 |
+| `perchannel_symmetric_affine int8` | `artifacts/bsd_v8_yolo26n_noattn_640_stage1/bsd_v8_yolo26n_noattn_640_stage1_perch_int8.nb` | `4,427,776` bytes | `23.66 ms` | 更慢、更大 |
+| sigmoid score output | `artifacts/bsd_v8_yolo26n_noattn_640_stage1/bsd_v8_yolo26n_noattn_640_stage1_sig_v2.nb` | `3,602,752` bytes | `17.64 ms` | 无速度收益；需要修改解码器 |
 
-The sigmoid-output split was regenerated with corrected BSD class metadata:
+sigmoid-output split 已按正确 BSD 类别元数据重新生成：
 
 ```bash
 python deployment/quantize/split_yolo_head_sig.py \
@@ -210,91 +198,60 @@ python deployment/quantize/split_yolo_head_sig.py \
   --output artifacts/bsd_v8_yolo26n_noattn_640_stage1/best_640_split_sig.onnx
 ```
 
-Important: sigmoid-output NB is not drop-in compatible with the current board
-decoder. The current `yolo_decode.c` expects raw logits and applies sigmoid on
-the CPU. Only use the sigmoid NB after changing the board decoder to consume
-already-sigmoided scores.
+重要：sigmoid-output NB 不能直接替换当前板端解码器。当前 `yolo_decode.c` 期望 raw logits，并在 CPU 上执行 sigmoid。只有在板端解码器改成消费已 sigmoid 的分数后，才能使用 sigmoid NB。
 
-Conclusion: standard v8 quantization remains the best speed candidate. The
-tested Pegasus quantization variants do not show a simulator speed improvement,
-so they are not priority board-deploy candidates. Further v8 work should focus
-on board runtime integration: input preprocessing, queueing, and 4-channel NPU
-scheduling.
+结论：标准 v8 量化仍是该路线速度最好的候选。已测试的 Pegasus 量化变体没有带来模拟器速度收益，因此不作为优先板端部署候选。后续 v8 工作应转向板端运行时集成：输入预处理、队列和四路 NPU 调度。
 
-## Gates
+## 验收门槛
 
-| Gate | Requirement |
+| 门槛 | 要求 |
 |---|---|
-| Accuracy | Compare against v7 on `coco_val` and `bdd_proxy_val` |
-| Size | Quantized NB `<5 MB` |
-| Board speed | Must beat v7 `92 ms`; target is closer to `50 ms` |
-| Board flow | `test_npu_direct` then `live_bsd headless 640` |
-| Baseline safety | Do not overwrite `/mnt/UDISK/bsd_v7_yolo26n_640.nb` |
+| 精度 | 在 `coco_val` 和 `bdd_proxy_val` 上对比 v7 |
+| 大小 | 量化 NB `<5 MB` |
+| 板端速度 | 必须快于 v7 `92 ms`，目标接近 `50 ms` |
+| 板端流程 | 先 `test_npu_direct`，再 `live_bsd headless 640` |
+| 基线保护 | 不覆盖 `/mnt/UDISK/bsd_v7_yolo26n_640.nb` |
 
-## Decision
+## 结论
 
-v8 no-attn is the current speed candidate, not the stable replacement yet. It
-passes the NB size gate and clearly improves board speed, while preserving
-`640x640` input and the existing raw-logit decoder path. Keep v7 as the
-production fallback because its recall is still better on `bdd_proxy_val` and
-formal `board_val` is still missing.
+v8 no-attn 是速度候选，不是稳定替代。它满足 NB 大小门槛，并在保留 `640x640` 输入和现有 raw-logit 解码路径的同时明显提升板端速度。由于 `bdd_proxy_val` recall 仍低于 v7，且正式 `board_val` 仍缺失，v7 保持生产回退。
 
-## 2026-06-13 Archive Decision
+## 2026-06-13 归档结论
 
-Current judgement: v8 is now an archived intermediate candidate. It should stay
-in the repository as the proof that removing attention improves the VIPLite
-graph, but new board deployment and optimization should use v9 or v9.1 instead.
+当前判断：v8 已归档为中间候选。它应保留在仓库中，作为“移除 attention 能改善 VIPLite 图”的证据；新的板端部署和优化应走 v9 或 v9.1。
 
-Why it was useful:
+它有价值的原因：
 
-- Size gate passes with margin: `3.43 MiB`, below the hard `<5 MB` NB limit.
-- Fixed-640 speed improves clearly: board NPU drops from about `92.1 ms` to
-  about `67.4 ms`.
-- Road-scene proxy mAP is slightly better than v7: `bdd_proxy_val` mAP50
-  `0.680` vs v7 `0.674`.
-- v8 avoids the v7 attention ops that mapped poorly to VIPLite
-  (`MATRIXMUL/SOFTMAX/PERMUTE`).
+- 大小门槛富余：`3.43 MiB`，低于硬性 `<5 MB` NB 限制。
+- 固定 640 速度明显提升：板端 NPU 从约 `92.1 ms` 降到约 `67.4 ms`。
+- 道路场景 proxy mAP 略高于 v7：`bdd_proxy_val` mAP50 为 `0.680`，v7 为 `0.674`。
+- v8 避开了 v7 中映射到 VIPLite 较差的 attention 算子（`MATRIXMUL/SOFTMAX/PERMUTE`）。
 
-Why it should not replace v7 yet:
+它暂不替代 v7 的原因：
 
-- `bdd_proxy_val` recall drops from v7 `0.615` to v8 `0.589`, about `-0.026`.
-  BSD cares about missed nearby person/two-wheel/vehicle targets more than
-  small precision gains.
-- `coco_val` is also slightly lower than v7: mAP50 `0.577` vs `0.586`.
-- There is still no formal board-side `board_val`; current board tests only
-  prove runtime flow and speed.
+- `bdd_proxy_val` recall 从 v7 `0.615` 降到 v8 `0.589`，约 `-0.026`。BSD 更不能接受近处 person/two-wheel/vehicle 漏检。
+- `coco_val` 也略低于 v7：mAP50 `0.577` vs `0.586`。
+- 还没有正式板端 `board_val`；当前板端测试只能证明链路和速度。
 
-Final position:
+最终定位：
 
-| Use | Decision |
+| 用途 | 结论 |
 |---|---|
-| Historical comparison | Keep |
-| No-attention proof | Keep |
-| Speed candidate | Superseded by v9 |
-| 4-channel scheduler baseline | Superseded by v9 |
-| Production fallback replacement | Not yet |
-| Final BSD model | Blocked by `board_val` and recall review |
+| 历史对比 | 保留 |
+| no-attention 证明 | 保留 |
+| 速度候选 | 已被 v9 替代 |
+| 四路调度基线 | 已被 v9 替代 |
+| 生产回退替代 | 暂不替代 |
+| 最终 BSD 模型 | 受 `board_val` 和召回复核阻塞 |
 
-## Remaining Optimization Space
+## 剩余优化空间
 
-Do not spend more time on v8 Pegasus quantization variants unless a new compiler
-flag or SDK path appears and v9/v9.1 cannot be compiled. Standard v8
-quantization remains documented only for comparison.
+除非出现新的编译器参数或 SDK 路径，且 v9/v9.1 无法编译，否则不要继续在 v8 Pegasus 量化变体上投入时间。标准 v8 量化仅作为对比记录保留。
 
-The remaining work below has moved to the v9/v9.1 route:
+以下剩余工作已经转到 v9/v9.1 路线：
 
-1. Board runtime profiling with v8: split `capture / preprocess / set_input /
-   awnn_run / get_output / decode / qbuf`, then optimize only the measured hot
-   stages.
-2. Four-channel design: one NPU worker, four latest-frame slots, round-robin
-   inference, drop stale frames. Do not run four independent model processes
-   because VIPLite serializes NPU work.
-3. Preprocess optimization: keep the existing NV21M fused path, then reduce row
-   index recomputation, repeated padding fill, and avoid unnecessary buffer
-   clears.
-4. Accuracy recovery without losing v8 speed: keep no-attention + `640x640`,
-   train with harder road-scene negatives and distill from v7/v4 if recall
-   remains behind.
-5. A smaller architecture is a separate v12 route only if v8 still cannot meet
-   4-channel latency after scheduler/preprocess work. Simple activation swaps
-   are rejected because v9/v10/v11 lost too much accuracy.
+1. 板端运行时 profiling：拆分 `capture / preprocess / set_input / awnn_run / get_output / decode / qbuf`，只优化实测热点。
+2. 四路设计：一个 NPU worker、四个 latest-frame slots、round-robin 推理、丢弃陈旧帧。不要跑四个独立模型进程，因为 VIPLite 会串行化 NPU 工作。
+3. 预处理优化：保留现有 NV21M fused path，再减少行索引重复计算、重复 padding fill，并避免不必要的 buffer clear。
+4. 精度恢复：保持 no-attention + `640x640`，加入更难道路负样本；如果 recall 仍落后，再从 v7/v4 蒸馏。
+5. 更小架构属于单独 v12 路线，仅当 v8/v9 在调度和预处理优化后仍无法满足四路延迟时再考虑。简单替换激活函数已被否决，因为 v9/v10/v11 曾出现较大精度损失。

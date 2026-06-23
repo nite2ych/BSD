@@ -1007,41 +1007,30 @@ python deployment/board/compile_live.py
 | 2026-05-29 | 完成 320 输入非重训练版导出、量化、板端测速；NPU 单次约 46 ms，精度待实拍验收 |
 | 2026-06-10 | 增加无板端实拍条件下的 v5 数据清洗、候选训练、PC 评估、量化和板端回归路线 |
 | 2026-06-11 | 明确主目标为符合 BSD 精度标准的 `YOLO26n@512`，补充公开数据集路线和 BDD100K 官方 detection 导入入口 |
-## 9. 2026-06-13 Current Candidate Snapshot
+## 9. 2026-06-13 当前候选快照
 
-Keep the stable v7 candidate for fallback:
+保留稳定 v7 候选作为回退：
 
-| Item | v7 stable | v8 no-attn speed candidate | v9 ReLU from v8 |
+| 项目 | v7 稳定回退 | v8 no-attn 速度候选 | v9 ReLU from v8 |
 |---|---:|---:|---:|
-| Model | `YOLO26n@640` | `YOLO26n_noattn@640` | `YOLO26n_noattn_relu@640` |
-| Board NB | `/mnt/UDISK/bsd_v7_yolo26n_640.nb` | `/mnt/UDISK/bsd_v8_yolo26n_noattn_640.nb` | `/mnt/UDISK/bsd_v9_relu_from_v8_640.nb` |
+| 模型 | `YOLO26n@640` | `YOLO26n_noattn@640` | `YOLO26n_noattn_relu@640` |
+| 板端 NB | `/mnt/UDISK/bsd_v7_yolo26n_640.nb` | `/mnt/UDISK/bsd_v8_yolo26n_noattn_640.nb` | `/mnt/UDISK/bsd_v9_relu_from_v8_640.nb` |
 | NB size | `3.52 MiB` | `3.43 MiB` | `2.01 MiB` |
 | `coco_val` mAP50 | `0.586` | `0.577` | `0.548` |
 | `bdd_proxy_val` mAP50 | `0.674` | `0.680` | `0.673` |
 | `bdd_proxy_val` recall | `0.615` | `0.589` | `0.577` |
-| Board NPU | about `92.1 ms` | about `67.4 ms` | about `31.3 ms` |
-| Detection total | about `109.2 ms` | about `84.5 ms` | about `48.5 ms` |
+| 板端 NPU | 约 `92.1 ms` | 约 `67.4 ms` | 约 `31.3 ms` |
+| 检测总耗时 | 约 `109.2 ms` | 约 `84.5 ms` | 约 `48.5 ms` |
 
-Decision: v9 ReLU from v8 is now the best measured speed candidate because it
-keeps fixed `640x640`, satisfies the hard `<5 MB` NB gate with margin, and drops
-board NPU time to about `31.3 ms`. It is not yet the production replacement
-because `bdd_proxy_val` recall is still below v7 and formal board-side
-`board_val` validation is missing. Continue to preserve v7 for comparison and
-fallback. Do not overwrite `/mnt/UDISK/bsd_v7_yolo26n_640.nb`; deploy speed
-candidates under separate filenames.
+结论：v9 ReLU from v8 是当前实测速度最好的候选，因为它保持固定 `640x640`，满足硬性 `<5 MB` NB 门槛且有余量，并把板端 NPU 降到约 `31.3 ms`。它还不是生产替代模型，因为 `bdd_proxy_val` recall 仍低于 v7，且正式板端 `board_val` 验证缺失。继续保留 v7 用于对比和回退。不要覆盖 `/mnt/UDISK/bsd_v7_yolo26n_640.nb`；速度候选必须使用独立文件名部署。
 
-Important distinction: early cold-trained v9 ReLU was mainly a speed proof and
-lost too much accuracy. The current useful v9 is the from-v8 fine-tune recorded
-in `docs/candidates/bsd_v9_yolo26n_noattn_relu_640.md`.
+重要区别：早期冷启动训练的 v9 ReLU 主要是速度证明，精度损失过大。当前有价值的 v9 是从 v8 微调得到的版本，记录在 `docs/candidates/bsd_v9_yolo26n_noattn_relu_640.md`。
 
-## 10. 2026-06-13 v9.1 Person/Vehicle Priority Route
+## 10. 2026-06-13 v9.1 Person/Vehicle 优先路线
 
-The next accuracy route freezes the fast v9 structure and improves data/training
-only. BSD acceptance should prioritize `person` and `vehicle` over four-class
-averages because bicycle/motorcycle scenes usually still contain a visible
-person and vehicle body.
+下一条精度路线冻结高速 v9 结构，只改数据和训练策略。BSD 验收应优先看 `person` 和 `vehicle`，而不是只看四类平均值，因为 bicycle/motorcycle 场景通常仍能看到人和车体。
 
-Entry points:
+入口：
 
 ```text
 tools/evaluate_bsd_pv_priority.py
@@ -1050,69 +1039,51 @@ training/detection/configs/bsd_v9p1_yolo26n_noattn_relu_640_pv_priority.yaml
 docs/candidates/bsd_v9p1_pv_priority_plan.md
 ```
 
-Current per-class check shows v9's main gap is recall, not precision. On
-`bdd_proxy_val`, v9 person recall is `0.676` vs v7 `0.731`, and vehicle recall is
-`0.806` vs v7 `0.841`. The v9.1 target is to recover these while keeping
-`YOLO26n_noattn + ReLU + 640`, NB `<5 MB`, and board NPU near `31-35 ms`.
+当前逐类检查显示，v9 的主要差距是 recall，不是 precision。在 `bdd_proxy_val` 上，v9 person recall 为 `0.676`，v7 为 `0.731`；v9 vehicle recall 为 `0.806`，v7 为 `0.841`。v9.1 的目标是在保持 `YOLO26n_noattn + ReLU + 640`、NB `<5 MB`、板端 NPU 接近 `31-35 ms` 的同时追回这些指标。
 
-The first v9.1 dataset base is:
+第一版 v9.1 数据集基座：
 
 ```text
 /root/autodl-tmp/BSD/datasets/bsd_v9p1_pv_priority
 ```
 
-It is built from `bsd_v6_public_kitti`, removes duplicate labels, and can accept
-reviewed extra sets through `--extra-set name:/images:/labels`. Real accuracy
-recovery should come from adding person/vehicle-heavy road data, not from
-changing the board-side runtime path.
+它基于 `bsd_v6_public_kitti` 构建，移除了重复标签，并可通过 `--extra-set name:/images:/labels` 接入经过审核的额外数据。真正的精度恢复应来自加入 person/vehicle-heavy 道路数据，而不是改板端运行路径。
 
-## 11. 2026-06-13 Stage Closeout
+## 11. 2026-06-13 阶段收尾
 
-This stage is closed with the following model roles:
+本阶段按以下模型角色收尾：
 
-| Role | Candidate | Status |
+| 角色 | 候选 | 状态 |
 |---|---|---|
-| Stable fallback | v7 `YOLO26n@640` | Keep on board; do not overwrite `/mnt/UDISK/bsd_v7_yolo26n_640.nb` |
-| Archived intermediate | v8 `YOLO26n_noattn@640` | Keep docs/weights only; no further board optimization |
-| Fast board baseline | v9 `YOLO26n_noattn_relu@640` | Keep as current speed reference |
-| Accuracy recovery candidate | v9.1 base `YOLO26n_noattn_relu@640` | Preferred next candidate for PC-side accuracy work |
+| 稳定回退 | v7 `YOLO26n@640` | 保留在板端；不要覆盖 `/mnt/UDISK/bsd_v7_yolo26n_640.nb` |
+| 已归档中间版本 | v8 `YOLO26n_noattn@640` | 只保留文档/权重；不再做板端优化 |
+| 板端速度基线 | v9 `YOLO26n_noattn_relu@640` | 保留为当前速度参考 |
+| 精度恢复候选 | v9.1 base `YOLO26n_noattn_relu@640` | PC 侧精度工作的优先候选 |
 
-Latest `bdd_proxy_val` person/vehicle comparison:
+最新 `bdd_proxy_val` person/vehicle 对比：
 
-| Candidate | P | R | mAP50 | PV Recall | PV mAP50 |
+| 候选 | P | R | mAP50 | PV Recall | PV mAP50 |
 |---|---:|---:|---:|---:|---:|
 | v7 | `0.682` | `0.615` | `0.674` | `0.786` | `0.808` |
 | v9 | `0.753` | `0.577` | `0.673` | `0.741` | `0.798` |
 | v9.1 base | `0.720` | `0.602` | `0.677` | `0.760` | `0.797` |
 | v9.1 bddval | `0.744` | `0.593` | `0.680` | `0.743` | `0.798` |
 
-Decision:
+结论：
 
-- v8 is no longer an active candidate. It proved the no-attention route but is
-  slower than v9 and not better enough to justify more board work.
-- v9 remains the measured speed baseline: NB about `2.01 MiB`, board NPU about
-  `31.3 ms`, live headless about `20 FPS`.
-- v9.1 base is the current accuracy recovery candidate because it improves
-  person/vehicle recall over v9 without changing the deployable architecture.
-- v9.1 bddval is not selected: it slightly improves overall mAP50 but lowers
-  the BSD-critical person/vehicle recall compared with v9.1 base.
+- v8 不再是活跃候选。它证明了 no-attention 路线，但慢于 v9，且优势不足以继续投入板端优化。
+- v9 保持为实测速度基线：NB 约 `2.01 MiB`，板端 NPU 约 `31.3 ms`，live headless 约 `20 FPS`。
+- v9.1 base 是当前精度恢复候选，因为它在不改变可部署架构的前提下提升了 person/vehicle recall。
+- v9.1 bddval 不被选择：它略微提升 overall mAP50，但相对 v9.1 base 降低了 BSD 关键 person/vehicle recall。
 
-Current improvement ceiling:
+当前提升上限：
 
-- With the current data and fixed architecture, further training-only gains are
-  likely small. Re-running early-stop variants did not materially move the BSD
-  metrics.
-- Meaningful accuracy improvement now needs reviewed person/vehicle-heavy road
-  data or a formal board validation set.
-- Meaningful speed improvement should be treated as a separate runtime/NPU
-  scheduling task. Do not change the selected model path just for speed unless
-  the `<5 MB` NB gate or 4-channel scheduling fails.
+- 在当前数据和固定架构下，继续只靠训练带来的收益大概率有限。重复 early-stop 变体没有实质改善 BSD 指标。
+- 有意义的精度提升现在需要经过审核的 person/vehicle-heavy 道路数据，或正式板端验证集。
+- 有意义的速度提升应作为单独的 runtime/NPU 调度任务处理。除非 `<5 MB` NB 门槛或四路调度失败，否则不要只为速度改变已选模型路径。
 
-Next stage entry conditions:
+下一阶段进入条件：
 
-1. Add curated road-scene data, especially small/occluded person and side/rear
-   vehicle cases, then rebuild the `bsd_v9p1_pv_priority` dataset.
-2. Re-train from v9.1 base and select by `bdd_proxy_val` person/vehicle recall
-   first, then mAP50.
-3. When board-side capture is available, build a real `board_val`; no final BSD
-   release should be selected without passing it.
+1. 加入精选道路场景数据，尤其是小目标/遮挡 person 和侧后方 vehicle，然后重建 `bsd_v9p1_pv_priority` 数据集。
+2. 从 v9.1 base 重新训练，先按 `bdd_proxy_val` person/vehicle recall 选择，再看 mAP50。
+3. 具备板端采集条件后，构建真实 `board_val`；没有通过它之前，不选择最终 BSD 发布模型。

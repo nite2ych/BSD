@@ -1,23 +1,23 @@
-# Training
+# 训练
 
-This directory currently contains BSD training configuration files only.
+该目录当前主要保存 BSD 训练配置文件。
 
-| File | Purpose |
+| 文件 | 用途 |
 |---|---|
-| `detection/configs/bsd_yolo26s.yaml` | Main BSD 4-class training config |
-| `detection/configs/bsd_yolo26s_small.yaml` | Smaller/alternate BSD training config |
+| `detection/configs/bsd_yolo26s.yaml` | BSD 4 类主训练配置 |
+| `detection/configs/bsd_yolo26s_small.yaml` | 更小/备用 BSD 训练配置 |
 
-Planned next-step config:
+后续候选配置：
 
-| File | Purpose |
+| 文件 | 用途 |
 |---|---|
-| `detection/configs/bsd_yolo26n.yaml` | Candidate smaller BSD model for board-side throughput comparison |
+| `detection/configs/bsd_yolo26n.yaml` | 用于板端吞吐对比的小模型候选 |
 
-The training and export entry scripts referenced by `BSD_DEV_GUIDE.md` are not currently present in this local repository:
+`BSD_DEV_GUIDE.md` 中引用的训练和导出入口脚本当前不在本地仓库内：
 
 ```text
 training/detection/train.py
 training/detection/export_onnx.py
 ```
 
-They need to be restored from the training environment or recreated before end-to-end training can run from this checkout.
+如果要从当前 checkout 直接跑通端到端训练，需要先从训练环境恢复这些脚本，或重新实现等价入口。
