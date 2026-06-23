@@ -1,0 +1,45 @@
+# BSD v6 n-route stage 1: train YOLO26n at 640 to recover small-target accuracy.
+# Final deployment target remains n@512; this stage provides a stronger teacher/base.
+model:
+  name: yolo26n
+  pretrained: /root/autodl-tmp/DMS/yolo26n.pt
+
+data:
+  yaml: /root/autodl-tmp/BSD/datasets/bsd_v5_balanced/dataset.yaml
+  proxy_val: /root/autodl-tmp/BSD/datasets/bsd_v5_balanced/bdd_proxy_val.yaml
+  nc: 4
+  names: [person, bicycle, motorcycle, vehicle]
+
+input:
+  imgsz: 640
+  channels: 3
+  format: rgb
+
+training:
+  epochs: 180
+  batch_size: 48
+  patience: 50
+  optimizer: SGD
+  lr0: 0.008
+  lrf: 0.01
+  momentum: 0.937
+  weight_decay: 0.0005
+  warmup_epochs: 3
+  seed: 46
+  close_mosaic: 20
+
+augmentation:
+  hsv_h: 0.015
+  hsv_s: 0.65
+  hsv_v: 0.35
+  translate: 0.08
+  scale: 0.45
+  fliplr: 0.5
+  mosaic: 0.8
+  mixup: 0.0
+  copy_paste: 0.0
+  erasing: 0.2
+
+output:
+  artifact_dir: /root/autodl-tmp/BSD/artifacts
+  name: bsd_v6_yolo26n_640_stage1

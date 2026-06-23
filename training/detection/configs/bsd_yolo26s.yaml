@@ -1,0 +1,63 @@
+# BSD 交通参与方检测 — YOLO26s 4 分类
+# 训练服务器: AutoDL / Seetacloud
+
+# 模型
+model:
+  name: yolo26s
+  pretrained: /root/autodl-tmp/DMS/yolo26s.pt
+
+# 数据
+data:
+  train: /root/autodl-tmp/BSD/datasets/bsd/train
+  val:   /root/autodl-tmp/BSD/datasets/bsd/val
+  nc: 4
+  names:
+    0: person
+    1: bicycle
+    2: motorcycle
+    3: vehicle
+
+# 输入
+input:
+  imgsz: 640
+  channels: 3
+  format: rgb
+
+# 数据增强 (含低照)
+augmentation:
+  hsv_h: 0.015
+  hsv_s: 0.7
+  hsv_v: 0.4
+  # 低照增强 (dark + low contrast + noise)
+  low_light:
+    enabled: true
+    dark_gamma: [0.3, 0.7]
+    low_contrast: true
+    gaussian_noise: [0, 5]
+  # 基础增强
+  mosaic: 1.0
+  mixup: 0.1
+  copy_paste: 0.1
+  flip_lr: 0.5
+  scale: 0.5
+
+# 训练参数
+training:
+  epochs: 100
+  batch_size: 128
+  patience: 30
+  optimizer: AdamW
+  lr0: 0.001
+  lrf: 0.01
+  momentum: 0.937
+  weight_decay: 0.0005
+  warmup_epochs: 3
+
+# GPU
+device:
+  - 0
+  - 1
+
+# 输出
+output:
+  artifact_dir: /root/autodl-tmp/BSD/artifacts

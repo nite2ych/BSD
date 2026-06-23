@@ -6,7 +6,7 @@ Output: boxes [1,4,N] + scores [1,nc,N] (raw logit, before Sigmoid)
 
 import argparse
 import onnx
-from onnx import helper, checker
+from onnx import helper, checker, shape_inference
 
 
 def split_head(input_path, output_path):
@@ -72,14 +72,26 @@ def split_head(input_path, output_path):
         if node.op_type == 'Reshape' and node.output[0] in concat_scores.input:
             score_reshape = node
 
-    # Determine number of classes from the score reshape shape
-    nc = 10  # default
+    # Determine number of classes from inferred concat output shape.
+    nc = 4  # BSD default
+    try:
+        inferred = shape_inference.infer_shapes(model)
+        for vi in list(inferred.graph.value_info) + list(inferred.graph.output):
+            if vi.name == scores_output_name:
+                dims = vi.type.tensor_type.shape.dim
+                if len(dims) >= 2 and dims[1].dim_value > 0:
+                    nc = int(dims[1].dim_value)
+                    break
+    except Exception as e:
+        print(f"Shape inference warning: {e}")
+
     if score_reshape:
         for init in model.graph.initializer:
             if init.name == score_reshape.input[1]:
                 import numpy as np
                 shape = onnx.numpy_helper.to_array(init)
-                nc = int(shape[1])
+                if len(shape) >= 2 and int(shape[1]) <= 16:
+                    nc = int(shape[1])
                 break
 
     print(f"Detected nc={nc}")

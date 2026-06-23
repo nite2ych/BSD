@@ -1,0 +1,45 @@
+# BSD v6 n-route stage 2: fine-tune the stage-1 n@640 model at 512.
+# This is the final deployment-size candidate.
+model:
+  name: yolo26n
+  pretrained: /root/autodl-tmp/BSD/artifacts/bsd_v6_yolo26n_640_stage1/weights/best.pt
+
+data:
+  yaml: /root/autodl-tmp/BSD/datasets/bsd_v5_balanced/dataset.yaml
+  proxy_val: /root/autodl-tmp/BSD/datasets/bsd_v5_balanced/bdd_proxy_val.yaml
+  nc: 4
+  names: [person, bicycle, motorcycle, vehicle]
+
+input:
+  imgsz: 512
+  channels: 3
+  format: rgb
+
+training:
+  epochs: 100
+  batch_size: 80
+  patience: 35
+  optimizer: SGD
+  lr0: 0.003
+  lrf: 0.01
+  momentum: 0.937
+  weight_decay: 0.0005
+  warmup_epochs: 2
+  seed: 47
+  close_mosaic: 15
+
+augmentation:
+  hsv_h: 0.015
+  hsv_s: 0.6
+  hsv_v: 0.35
+  translate: 0.08
+  scale: 0.35
+  fliplr: 0.5
+  mosaic: 0.5
+  mixup: 0.0
+  copy_paste: 0.0
+  erasing: 0.15
+
+output:
+  artifact_dir: /root/autodl-tmp/BSD/artifacts
+  name: bsd_v6_yolo26n_512_stage2

@@ -1,0 +1,46 @@
+# BSD v9 speed probe: YOLO26n_noattn@640 with ReLU activation.
+# Probe only. Use random/untrained weights for NPU timing before training.
+model:
+  name: yolo26n_noattn_relu_probe
+  architecture: /root/autodl-tmp/BSD/training/detection/models/yolo26n_noattn.yaml
+  activation: ReLU
+
+data:
+  yaml: /root/autodl-tmp/BSD/datasets/bsd_v6_public_kitti/dataset.yaml
+  proxy_val: /root/autodl-tmp/BSD/datasets/bsd_v6_public_kitti/bdd_proxy_val.yaml
+  nc: 4
+  names: [person, bicycle, motorcycle, vehicle]
+
+input:
+  imgsz: 640
+  channels: 3
+  format: rgb
+
+training:
+  epochs: 1
+  batch_size: 1
+  patience: 1
+  optimizer: SGD
+  lr0: 0.004
+  lrf: 0.01
+  momentum: 0.937
+  weight_decay: 0.0005
+  warmup_epochs: 0
+  seed: 51
+  close_mosaic: 0
+
+augmentation:
+  hsv_h: 0.0
+  hsv_s: 0.0
+  hsv_v: 0.0
+  translate: 0.0
+  scale: 0.0
+  fliplr: 0.0
+  mosaic: 0.0
+  mixup: 0.0
+  copy_paste: 0.0
+  erasing: 0.0
+
+output:
+  artifact_dir: /root/autodl-tmp/BSD/artifacts
+  name: bsd_v9_yolo26n_noattn_relu_640_probe

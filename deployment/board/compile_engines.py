@@ -4,7 +4,12 @@ import os
 
 ssh = paramiko.SSHClient()
 ssh.set_missing_host_key_policy(paramiko.AutoAddPolicy())
-ssh.connect('192.168.144.136', username='ubuntu', password='ubuntu', timeout=30)
+ssh.connect(
+    os.environ.get('BSD_BUILD_HOST', '192.168.144.136'),
+    username=os.environ.get('BSD_BUILD_USER', 'ubuntu'),
+    password=os.environ.get('BSD_BUILD_PASSWORD'),
+    timeout=30,
+)
 
 REMOTE_DIR = '/home/ubuntu/bsd_engine'
 ssh.exec_command(f'mkdir -p {REMOTE_DIR}/detect_engine {REMOTE_DIR}/alarm_engine {REMOTE_DIR}/common')

@@ -19,15 +19,33 @@ ALM_OBJS = alarm_engine.o zone_mgr.o tracker.o
 # Shared library
 SO_TARGET = libdetect_engine.so
 
-# Standalone binary
+# Standalone binary (stdin reader, for testing)
 BIN_TARGET = bsd_detect
 
-all: $(SO_TARGET) $(BIN_TARGET)
+# Live BSD pipeline (camera + NPU + framebuffer)
+LIVE_TARGET = live_bsd
+
+# Direct raw-frame NPU test
+TEST_NPU_TARGET = test_npu_direct
+
+# Continuous raw-frame NPU benchmark
+BENCH_NPU_TARGET = bench_npu_loop
+
+all: $(SO_TARGET) $(BIN_TARGET) $(LIVE_TARGET) $(TEST_NPU_TARGET) $(BENCH_NPU_TARGET)
 
 $(SO_TARGET): $(DET_OBJS)
 	$(CC) $(CFLAGS) -o $@ $^ -shared $(LIBS)
 
 $(BIN_TARGET): $(DET_OBJS) $(ALM_OBJS) main.o
+	$(CC) $(CFLAGS) -o $@ $^ $(LIBS)
+
+$(LIVE_TARGET): $(DET_OBJS) $(ALM_OBJS) live_bsd.o
+	$(CC) $(CFLAGS) -o $@ $^ $(LIBS)
+
+$(TEST_NPU_TARGET): $(DET_OBJS) test_npu_direct.o
+	$(CC) $(CFLAGS) -o $@ $^ $(LIBS)
+
+$(BENCH_NPU_TARGET): $(DET_OBJS) bench_npu_loop.o
 	$(CC) $(CFLAGS) -o $@ $^ $(LIBS)
 
 %.o: %.c
@@ -44,6 +62,6 @@ tracker.o: $(ALM_DIR)/tracker.c
 	$(CC) $(CFLAGS) -c $< -o $@
 
 clean:
-	rm -f $(DET_OBJS) $(ALM_OBJS) main.o $(SO_TARGET) $(BIN_TARGET)
+	rm -f $(DET_OBJS) $(ALM_OBJS) main.o live_bsd.o test_npu_direct.o bench_npu_loop.o $(SO_TARGET) $(BIN_TARGET) $(LIVE_TARGET) $(TEST_NPU_TARGET) $(BENCH_NPU_TARGET)
 
 .PHONY: all clean

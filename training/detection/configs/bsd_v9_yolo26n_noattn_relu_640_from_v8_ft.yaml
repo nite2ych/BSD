@@ -1,0 +1,48 @@
+# BSD v9 precision-recovery route: YOLO26n no-attention ReLU@640.
+# Start from the trained v8 no-attention SiLU weights, then fine-tune with ReLU.
+# This tests whether v9 lost accuracy mainly because it was trained cold.
+model:
+  name: yolo26n_noattn_relu_from_v8
+  architecture: /root/autodl-tmp/BSD/training/detection/models/yolo26n_noattn.yaml
+  activation: ReLU
+  pretrained: /root/autodl-tmp/BSD/artifacts/bsd_v8_yolo26n_noattn_640_stage1/weights/best.pt
+
+data:
+  yaml: /root/autodl-tmp/BSD/datasets/bsd_v6_public_kitti/dataset.yaml
+  proxy_val: /root/autodl-tmp/BSD/datasets/bsd_v6_public_kitti/bdd_proxy_val.yaml
+  nc: 4
+  names: [person, bicycle, motorcycle, vehicle]
+
+input:
+  imgsz: 640
+  channels: 3
+  format: rgb
+
+training:
+  epochs: 80
+  batch_size: 48
+  patience: 25
+  optimizer: SGD
+  lr0: 0.0015
+  lrf: 0.05
+  momentum: 0.937
+  weight_decay: 0.0005
+  warmup_epochs: 2
+  seed: 55
+  close_mosaic: 10
+
+augmentation:
+  hsv_h: 0.012
+  hsv_s: 0.5
+  hsv_v: 0.30
+  translate: 0.06
+  scale: 0.30
+  fliplr: 0.5
+  mosaic: 0.25
+  mixup: 0.0
+  copy_paste: 0.0
+  erasing: 0.05
+
+output:
+  artifact_dir: /root/autodl-tmp/BSD/artifacts
+  name: bsd_v9_yolo26n_noattn_relu_640_from_v8_ft

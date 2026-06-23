@@ -1,0 +1,52 @@
+# BSD 第一轮训练 — 小数据集快速验证 (2000 train + 500 val)
+# 目标：跑通全链路 (训练 → ONNX → 量化 → 板端)
+
+model:
+  name: yolo26s
+  pretrained: /root/autodl-tmp/DMS/yolo26s.pt
+
+data:
+  train: /root/autodl-tmp/BSD/datasets/bsd_small/train
+  val:   /root/autodl-tmp/BSD/datasets/bsd_small/val
+  nc: 4
+  names:
+    0: person
+    1: bicycle
+    2: motorcycle
+    3: vehicle
+
+input:
+  imgsz: 640
+  channels: 3
+  format: rgb
+
+augmentation:
+  hsv_h: 0.015
+  hsv_s: 0.7
+  hsv_v: 0.4
+  low_light:
+    enabled: true
+    dark_gamma: [0.3, 0.7]
+    low_contrast: true
+    gaussian_noise: [0, 5]
+  mosaic: 1.0
+  mixup: 0.1
+  flip_lr: 0.5
+  scale: 0.5
+
+training:
+  epochs: 50
+  batch_size: 32
+  patience: 15
+  optimizer: AdamW
+  lr0: 0.001
+  lrf: 0.01
+  momentum: 0.937
+  weight_decay: 0.0005
+  warmup_epochs: 2
+
+device:
+  - 0
+
+output:
+  artifact_dir: /root/autodl-tmp/BSD/artifacts

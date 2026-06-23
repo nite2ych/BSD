@@ -1,0 +1,45 @@
+# BSD v7 public-data route stage 2.
+# Final deployment-size candidate after public_kitti stage 1.
+model:
+  name: yolo26n
+  pretrained: /root/autodl-tmp/BSD/artifacts/bsd_v7_yolo26n_640_public_kitti_stage1/weights/best.pt
+
+data:
+  yaml: /root/autodl-tmp/BSD/datasets/bsd_v6_public_kitti/dataset.yaml
+  proxy_val: /root/autodl-tmp/BSD/datasets/bsd_v6_public_kitti/bdd_proxy_val.yaml
+  nc: 4
+  names: [person, bicycle, motorcycle, vehicle]
+
+input:
+  imgsz: 512
+  channels: 3
+  format: rgb
+
+training:
+  epochs: 80
+  batch_size: 80
+  patience: 25
+  optimizer: SGD
+  lr0: 0.002
+  lrf: 0.01
+  momentum: 0.937
+  weight_decay: 0.0005
+  warmup_epochs: 2
+  seed: 49
+  close_mosaic: 12
+
+augmentation:
+  hsv_h: 0.015
+  hsv_s: 0.55
+  hsv_v: 0.3
+  translate: 0.07
+  scale: 0.3
+  fliplr: 0.5
+  mosaic: 0.4
+  mixup: 0.0
+  copy_paste: 0.0
+  erasing: 0.1
+
+output:
+  artifact_dir: /root/autodl-tmp/BSD/artifacts
+  name: bsd_v7_yolo26n_512_public_kitti_stage2

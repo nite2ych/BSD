@@ -1,0 +1,54 @@
+# BSD v9.2 current-data fine-tune.
+#
+# This keeps the fastest deployable model shape:
+#   YOLO26n_noattn + ReLU + 640
+#
+# It starts from the selected v9.1 base weights and uses the current
+# bsd_v9p1_pv_priority dataset. The real v9.2 public-data route should replace
+# data.yaml with bsd_v9p2_public_expand once CityPersons/EuroCity data is
+# available.
+model:
+  name: yolo26n_noattn_relu_v9p2_currentdata
+  architecture: /root/autodl-tmp/BSD/training/detection/models/yolo26n_noattn.yaml
+  activation: ReLU
+  pretrained: /root/autodl-tmp/BSD/artifacts/bsd_v9p1_yolo26n_noattn_relu_640_pv_priority/weights/best.pt
+
+data:
+  yaml: /root/autodl-tmp/BSD/datasets/bsd_v9p1_pv_priority/dataset.yaml
+  proxy_val: /root/autodl-tmp/BSD/datasets/bsd_v9p1_pv_priority/bdd_proxy_val.yaml
+  nc: 4
+  names: [person, bicycle, motorcycle, vehicle]
+
+input:
+  imgsz: 640
+  channels: 3
+  format: rgb
+
+training:
+  epochs: 45
+  batch_size: 48
+  patience: 12
+  optimizer: SGD
+  lr0: 0.00045
+  lrf: 0.05
+  momentum: 0.937
+  weight_decay: 0.0005
+  warmup_epochs: 1
+  seed: 71
+  close_mosaic: 6
+
+augmentation:
+  hsv_h: 0.008
+  hsv_s: 0.35
+  hsv_v: 0.22
+  translate: 0.04
+  scale: 0.20
+  fliplr: 0.5
+  mosaic: 0.12
+  mixup: 0.0
+  copy_paste: 0.0
+  erasing: 0.03
+
+output:
+  artifact_dir: /root/autodl-tmp/BSD/artifacts
+  name: bsd_v9p2_yolo26n_noattn_relu_640_currentdata

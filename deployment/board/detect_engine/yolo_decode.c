@@ -1,53 +1,114 @@
 // deployment/board/detect_engine/yolo_decode.c
 // YOLO output decoder: logit→sigmoid, decode boxes, NMS
 #include <math.h>
+#include <stdio.h>
 #include <string.h>
 #include "../common/types.h"
 
-#define NUM_CELLS   8400
 #define NUM_CLASSES 4
+
+static int g_model_size = 640;
+static int g_grid0 = 80;
+static int g_grid1 = 40;
+static int g_grid2 = 20;
+static int g_cells0 = 6400;
+static int g_cells1 = 1600;
+static int g_cells2 = 400;
+static int g_num_cells = 8400;
 
 static inline float sigmoid(float x)
 {
     return 1.0f / (1.0f + expf(-x));
 }
 
-// Decode YOLO outputs into candidate detections.
-// boxes:  [1, 4, 8400]  — cx,cy,w,h (model output, normalized 0~1)
-// scores: [1, 4, 8400]  — raw logits
+int yolo_set_model_size(int model_size)
+{
+    if (model_size != 320 && model_size != 416 &&
+        model_size != 512 && model_size != 640) {
+        return -1;
+    }
+    if ((model_size % 32) != 0) return -1;
+
+    g_model_size = model_size;
+    g_grid0 = model_size / 8;
+    g_grid1 = model_size / 16;
+    g_grid2 = model_size / 32;
+    g_cells0 = g_grid0 * g_grid0;
+    g_cells1 = g_grid1 * g_grid1;
+    g_cells2 = g_grid2 * g_grid2;
+    g_num_cells = g_cells0 + g_cells1 + g_cells2;
+    return 0;
+}
+
+int yolo_get_num_cells(void)
+{
+    return g_num_cells;
+}
+
+// YOLO11s reg_max=1 decode. The model outputs raw logits for both boxes
+// and scores (no sigmoid in graph). Box values are LTRB distances in GRID
+// CELL units (not pixels), directly usable without sigmoid.
+//
+//   head 0: 80×80 = 6400 cells, stride=8
+//   head 1: 40×40 = 1600 cells, stride=16
+//   head 2: 20×20 =  400 cells, stride=32
+//
+// NPU output layout is NCHW [4, NUM_CELLS] (preserving ONNX layout):
+//   boxes[c][i]  = boxes[c * NUM_CELLS + i]   (c=0:left, 1:top, 2:right, 3:bottom)
+//   scores[c][i] = scores[c * NUM_CELLS + i]  (c=0..3 class logits)
 // det_out: output array (caller-allocated, max_det entries)
-// conf_thr: confidence threshold
-// Returns: number of candidate detections
+// class_thr[4]: per-class confidence thresholds (person, bicycle, motorcycle, vehicle)
 int yolo_decode(const float* boxes, const float* scores,
-                DetObject* det_out, int max_det, float conf_thr)
+                DetObject* det_out, int max_det, const float class_thr[4])
 {
     int count = 0;
-    for (int i = 0; i < NUM_CELLS && count < max_det; i++) {
-        // Find best class
+    for (int i = 0; i < g_num_cells && count < max_det; i++) {
+        // NCHW: class c score for cell i is at scores[c * num_cells + i]
         int best_cls = 0;
-        float best_logit = scores[0 * NUM_CELLS + i];
-        for (int c = 1; c < NUM_CLASSES; c++) {
-            float logit = scores[c * NUM_CELLS + i];
-            if (logit > best_logit) {
-                best_logit = logit;
-                best_cls = c;
-            }
-        }
+        float best_logit = scores[0 * g_num_cells + i];
+        if (scores[1 * g_num_cells + i] > best_logit) { best_logit = scores[1 * g_num_cells + i]; best_cls = 1; }
+        if (scores[2 * g_num_cells + i] > best_logit) { best_logit = scores[2 * g_num_cells + i]; best_cls = 2; }
+        if (scores[3 * g_num_cells + i] > best_logit) { best_logit = scores[3 * g_num_cells + i]; best_cls = 3; }
+
         float conf = sigmoid(best_logit);
-        if (conf < conf_thr) continue;
 
-        // Get box: cx, cy, w, h (normalized)
-        float cx = boxes[0 * NUM_CELLS + i];
-        float cy = boxes[1 * NUM_CELLS + i];
-        float w  = boxes[2 * NUM_CELLS + i];
-        float h  = boxes[3 * NUM_CELLS + i];
+        if (conf < class_thr[best_cls]) continue;
 
-        det_out[count].x1 = cx - w / 2.0f;
-        det_out[count].y1 = cy - h / 2.0f;
-        det_out[count].x2 = cx + w / 2.0f;
-        det_out[count].y2 = cy + h / 2.0f;
+        // Determine grid position and stride
+        int gx, gy, stride;
+        if (i < g_cells0) {
+            gx = i % g_grid0;  gy = i / g_grid0;  stride = 8;
+        } else if (i < g_cells0 + g_cells1) {
+            int j = i - g_cells0;
+            gx = j % g_grid1;  gy = j / g_grid1;  stride = 16;
+        } else {
+            int j = i - g_cells0 - g_cells1;
+            gx = j % g_grid2;  gy = j / g_grid2;  stride = 32;
+        }
+
+        // NCHW: box coord c for cell i is at boxes[c * num_cells + i]
+        float left   = boxes[0 * g_num_cells + i];
+        float top    = boxes[1 * g_num_cells + i];
+        float right  = boxes[2 * g_num_cells + i];
+        float bottom = boxes[3 * g_num_cells + i];
+
+        // Anchor point in grid-cell coordinates
+        float anchor_x = (float)gx + 0.5f;
+        float anchor_y = (float)gy + 0.5f;
+
+        // dist2bbox: anchor +/- distance -> xyxy in grid units, then normalize.
+        float x1 = (anchor_x - left)   * (float)stride / (float)g_model_size;
+        float y1 = (anchor_y - top)    * (float)stride / (float)g_model_size;
+        float x2 = (anchor_x + right)  * (float)stride / (float)g_model_size;
+        float y2 = (anchor_y + bottom) * (float)stride / (float)g_model_size;
+
+        det_out[count].x1 = x1;
+        det_out[count].y1 = y1;
+        det_out[count].x2 = x2;
+        det_out[count].y2 = y2;
         det_out[count].conf = conf;
         det_out[count].class_id = best_cls;
+
         count++;
     }
     return count;

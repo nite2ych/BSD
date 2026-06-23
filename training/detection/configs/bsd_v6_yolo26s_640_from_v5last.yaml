@@ -1,0 +1,44 @@
+# BSD v6 precision candidate: start from v5 last and add reviewed hard negatives.
+model:
+  name: yolo26s
+  pretrained: /root/autodl-tmp/BSD/artifacts/bsd_v5_yolo26s_640/weights/last.pt
+
+data:
+  yaml: /root/autodl-tmp/BSD/datasets/bsd_v6_precision/dataset.yaml
+  proxy_val: /root/autodl-tmp/BSD/datasets/bsd_v6_precision/bdd_proxy_val.yaml
+  nc: 4
+  names: [person, bicycle, motorcycle, vehicle]
+
+input:
+  imgsz: 640
+  channels: 3
+  format: rgb
+
+training:
+  epochs: 100
+  batch_size: 32
+  patience: 35
+  optimizer: SGD
+  lr0: 0.003
+  lrf: 0.01
+  momentum: 0.937
+  weight_decay: 0.0005
+  warmup_epochs: 2
+  seed: 45
+  close_mosaic: 10
+
+augmentation:
+  hsv_h: 0.015
+  hsv_s: 0.6
+  hsv_v: 0.35
+  translate: 0.08
+  scale: 0.4
+  fliplr: 0.5
+  mosaic: 0.5
+  mixup: 0.0
+  copy_paste: 0.0
+  erasing: 0.2
+
+output:
+  artifact_dir: /root/autodl-tmp/BSD/artifacts
+  name: bsd_v6_yolo26s_640_from_v5last

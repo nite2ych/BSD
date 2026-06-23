@@ -29,7 +29,7 @@ static void on_alarm(const AlarmEvent* evt)
 int main(int argc, char** argv)
 {
     if (argc < 2) {
-        fprintf(stderr, "Usage: %s <model.nb> [cam_width cam_height] [conf_thr nms_thr]\n", argv[0]);
+        fprintf(stderr, "Usage: %s <model.nb> [cam_width cam_height] [conf_thr nms_thr] [alarm_frames=3] [max_missed=3] [cooldown=15] [reemit=15] [vehicle_alarm=1]\n", argv[0]);
         fprintf(stderr, "  Default: 1920x1080 conf=0.3 nms=0.45\n");
         return 1;
     }
@@ -39,6 +39,11 @@ int main(int argc, char** argv)
     int cam_h = (argc >= 4) ? atoi(argv[3]) : 1080;
     float conf_thr = (argc >= 6) ? atof(argv[4]) : 0.3f;
     float nms_thr  = (argc >= 6) ? atof(argv[5]) : 0.45f;
+    int alarm_frames = (argc >= 7) ? atoi(argv[6]) : 3;
+    int max_missed = (argc >= 8) ? atoi(argv[7]) : 3;
+    int alarm_cooldown = (argc >= 9) ? atoi(argv[8]) : 15;
+    int alarm_reemit = (argc >= 10) ? atoi(argv[9]) : 15;
+    int vehicle_alarm = (argc >= 11) ? atoi(argv[10]) : 1;
 
     signal(SIGINT, sig_handler);
     signal(SIGTERM, sig_handler);
@@ -62,13 +67,18 @@ int main(int argc, char** argv)
         return 1;
     }
 
-    // Set alarm zones (normalized coords 0~1)
+    // Set alarm zones in pixel coords.
     // Zone 0: center region (highest priority)
-    alarm_set_zone(0, 0.25f, 0.2f, 0.75f, 0.8f, 0.3f);
+    alarm_set_zone(0, cam_w * 0.25f, cam_h * 0.2f, cam_w * 0.75f, cam_h * 0.8f, 0.3f);
     // Zone 1: full frame (lower priority)
-    alarm_set_zone(1, 0.0f, 0.0f, 1.0f, 1.0f, 0.3f);
+    alarm_set_zone(1, 0.0f, 0.0f, (float)cam_w, (float)cam_h, 0.3f);
 
-    alarm_set_frame_threshold(10);
+    alarm_set_frame_threshold(alarm_frames);
+    alarm_set_tracker_params(max_missed, alarm_cooldown, alarm_reemit, 0.30f, 0.65f);
+    alarm_set_class_enabled(CLASS_PERSON, 1);
+    alarm_set_class_enabled(CLASS_BICYCLE, 1);
+    alarm_set_class_enabled(CLASS_MOTORCYCLE, 1);
+    alarm_set_class_enabled(CLASS_VEHICLE, vehicle_alarm);
     alarm_register_callback(on_alarm);
 
     if (alarm_start() != 0) {

@@ -1,0 +1,79 @@
+#!/bin/sh /etc/rc.common
+
+START=99
+STOP=10
+
+PROG=/mnt/UDISK/live_bsd
+MODEL=/mnt/UDISK/bsd_v7_yolo26n_640.nb
+LOG=/mnt/UDISK/bsd_live_autostart.log
+PIDFILE=/var/run/bsd_live.pid
+WAIT_SECS=30
+
+DET_CONF=0.5
+NMS_THR=0.45
+DISP_CONF=0.5
+PERSON_CONF=0.5
+CAM_W=1280
+CAM_H=720
+MODE=headless
+MODEL_SIZE=640
+ALARM_FRAMES=3
+ALARM_MAX_MISSED=3
+ALARM_COOLDOWN=15
+ALARM_REEMIT=15
+ALARM_SMOOTH=0.65
+VEHICLE_ALARM=1
+
+start() {
+    if pidof live_bsd >/dev/null 2>&1; then
+        echo "bsd_live already running"
+        return 0
+    fi
+
+    i=0
+    while [ "$i" -lt "$WAIT_SECS" ]; do
+        [ -x "$PROG" ] && [ -f "$MODEL" ] && break
+        sleep 1
+        i=$((i + 1))
+    done
+
+    if [ ! -x "$PROG" ]; then
+        echo "missing executable: $PROG"
+        return 1
+    fi
+    if [ ! -f "$MODEL" ]; then
+        echo "missing model: $MODEL"
+        return 1
+    fi
+
+    export LD_LIBRARY_PATH=/mnt/UDISK:/usr/lib:/lib
+    echo "==== $(date) starting bsd_live ====" >> "$LOG"
+    "$PROG" "$MODEL" "$DET_CONF" "$NMS_THR" "$DISP_CONF" "$PERSON_CONF" \
+        "$CAM_W" "$CAM_H" "$MODE" "$MODEL_SIZE" \
+        "$ALARM_FRAMES" "$ALARM_MAX_MISSED" "$ALARM_COOLDOWN" \
+        "$ALARM_REEMIT" "$ALARM_SMOOTH" "$VEHICLE_ALARM" >> "$LOG" 2>&1 &
+    echo $! > "$PIDFILE"
+}
+
+stop() {
+    if [ -f "$PIDFILE" ]; then
+        kill "$(cat "$PIDFILE")" 2>/dev/null
+        rm -f "$PIDFILE"
+    fi
+    killall live_bsd 2>/dev/null
+}
+
+restart() {
+    stop
+    sleep 1
+    start
+}
+
+status() {
+    if pidof live_bsd >/dev/null 2>&1; then
+        echo "bsd_live running"
+        return 0
+    fi
+    echo "bsd_live stopped"
+    return 1
+}

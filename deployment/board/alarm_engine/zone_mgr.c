@@ -61,6 +61,7 @@ float zone_mgr_overlap(const Box* bbox, int level)
 int zone_mgr_hit_test(const Box* bbox, float* out_overlap)
 {
     for (int level = 0; level < MAX_ZONES; level++) {
+        if (!g_zones[level].active) continue;
         float overlap = zone_mgr_overlap(bbox, level);
         if (overlap >= g_zones[level].overlap_thr) {
             if (out_overlap) *out_overlap = overlap;

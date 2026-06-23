@@ -14,7 +14,7 @@ Camera (BGR interleaved)
 │                              │
 │  BGR → letterbox → RGB planar│
 │  NPU inference (AWNN)        │
-│  YOLO decode (logit→sigmoid) │
+│  YOLO decode (LTRB + sigmoid)│
 │  NMS (per-class greedy IOU)  │
 │  Coordinate remap + clip     │
 │        │                     │
@@ -45,9 +45,9 @@ deployment/board/
 │   ├── detect_engine.h      # 接口: init / process_frame / get_result / deinit
 │   ├── detect_engine.c      # 主引擎: NPU管理 + 共享内存 + 推理管线
 │   ├── preprocess.c         # BGR interleaved → RGB planar letterbox
-│   ├── yolo_decode.c        # logit→sigmoid 解码 + NMS
+│   ├── yolo_decode.c        # LTRB distance 解码 + logit→sigmoid + NMS
 │   ├── main.c               # 集成入口 (detect + alarm)
-│   └── Makefile             # 交叉编译 (libdetect_engine.so + bsd_detect)
+│   └── Makefile             # 交叉编译 (libdetect_engine.so + bsd_detect + live_bsd + test_npu_direct)
 ├── alarm_engine/
 │   ├── alarm_engine.h       # 接口: init / set_zone / start / stop / deinit
 │   ├── alarm_engine.c       # 告警主循环 (独立线程, 读共享内存)
@@ -60,7 +60,7 @@ deployment/board/
 
 ## 编译
 
-**编译环境**: Ubuntu 18.04 (192.168.144.136)  
+**编译环境**: Ubuntu 18.04 (192.168.144.137)
 **工具链**: `arm-openwrt-linux-muslgnueabi-gcc` (Tina-V853 SDK)  
 **依赖**: `libawnn_full.a`, `libVIPuser.a`, `libVIPlite.a`, `libstdc++`, `libpthread`
 
@@ -109,11 +109,11 @@ cat /mnt/UDISK/test_1920x1080.raw | /mnt/UDISK/bsd_detect /mnt/UDISK/bsd_v4_640.
 ### NPU 推理 (detect_engine.c)
 - **API**: `awnn_init` → `awnn_create` → `awnn_set_input_buffers` → `awnn_run` → `awnn_get_output_buffers`
 - **模型**: bsd_v4_640.nb (YOLO11s, 4类, 640×640, uint8 量化)
-- **输出**: `boxes[4×8400]` (float, cx/cy/w/h 归一化), `scores[4×8400]` (float, raw logit)
+- **输出**: `boxes[4×8400]` (float, LTRB distances in grid-cell units), `scores[4×8400]` (float, raw logit)
 
 ### 解码 (yolo_decode.c)
 1. 逐 cell 扫描: logit → sigmoid, 找最佳类别
-2. conf > threshold → 加入候选列表 (cx/w/h → x1/y1/x2/y2)
+2. conf > threshold → 按 stride 8/16/32 将 LTRB distance 解码为 x1/y1/x2/y2
 3. 按 conf 排序, 贪婪 NMS (per-class, IOU > nms_thr → 抑制)
 4. 紧凑化: 有效检测移到数组前部
 
@@ -132,8 +132,9 @@ pixel_y = (norm_y * 640 - pad_y) / scale
 
 ### 告警引擎 (alarm_engine)
 1. **Zone 管理**: 最多 3 层矩形区域 (归一化坐标), Level 0 优先级最高
-2. **Tracker**: IOU 匹配检测框与已有轨迹 (threshold=0.3), 未匹配的创建新轨迹, 失配的释放
-3. **告警**: 同类别/同区域连续命中 ≥ 10 帧 → 触发回调
+2. **Tracker**: IOU 匹配检测框与已有轨迹 (threshold=0.3), 未匹配的创建新轨迹
+3. **可靠性增强**: 框平滑、短时漏检保持、离区冷却、长时间报警节流
+4. **告警**: 同类别/同区域连续命中达到阈值后触发回调
 
 ## API 参考
 
@@ -146,6 +147,7 @@ int  detect_init(const char* nb_path, const char* shm_name,
 int  detect_process_frame(const uint8_t* frame_buf);
 const DetResult* detect_get_result(void);
 void detect_deinit(void);
+void detect_set_class_threshold(int class_id, float thr);
 ```
 
 ### alarm_engine
@@ -154,6 +156,10 @@ void detect_deinit(void);
 int  alarm_init(const char* shm_name);
 int  alarm_set_zone(int level, float x1, float y1, float x2, float y2, float overlap_thr);
 int  alarm_set_frame_threshold(int n);
+int  alarm_set_tracker_params(int max_missed, int cooldown_frames,
+                              int reemit_frames, float match_iou_thr,
+                              float smooth_alpha);
+int  alarm_set_class_enabled(int class_id, int enabled);
 int  alarm_register_callback(alarm_callback_t cb);
 int  alarm_start(void);
 int  alarm_stop(void);
@@ -166,6 +172,8 @@ void alarm_deinit(void);
 |------|---------|----------|
 | 单帧 640×640 | 640×640 BGR | person 0.700, person 0.300 |
 | 单帧 1920×1080 | 1920×1080 BGR | vehicle 0.780, vehicle 0.700 |
+| 回灌帧 frame_000055 | 1280×720 BGR | person 0.719, box=[744,5,1171,710] |
+| 回灌帧 frame_000069 | 1280×720 BGR | 近全画幅 vehicle 已被 95% 宽高过滤 |
 
 NPU 推理正常, 坐标映射正确, 退化框过滤有效, alarm 引擎线程正常运行。
 

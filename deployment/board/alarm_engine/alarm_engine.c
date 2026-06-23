@@ -20,6 +20,9 @@ extern int  tracker_update(const DetObject* dets, int n_det,
                            const int* zone_hits, const float* overlaps,
                            AlarmEvent* out_alarms, int max_alarms,
                            int frame_thr);
+extern int  tracker_set_params(int max_missed, int cooldown_frames,
+                               int reemit_frames, float match_iou_thr,
+                               float smooth_alpha);
 
 // Internal state
 static struct {
@@ -36,6 +39,9 @@ static struct {
 
     // Previous frame id (for frame rate control)
     uint32_t last_frame_id;
+
+    // Per-class alarm enable mask. Default keeps legacy behavior.
+    int class_enabled[MAX_CLASSES];
 } g_alarm;
 
 int alarm_init(const char* shm_name)
@@ -46,6 +52,10 @@ int alarm_init(const char* shm_name)
     // Initialize sub-modules
     zone_mgr_init();
     tracker_init();
+    g_alarm.class_enabled[CLASS_PERSON] = 1;
+    g_alarm.class_enabled[CLASS_BICYCLE] = 1;
+    g_alarm.class_enabled[CLASS_MOTORCYCLE] = 1;
+    g_alarm.class_enabled[CLASS_VEHICLE] = 0;
 
     // Open detect engine shared memory (read-only)
     g_alarm.shm_fd = shm_open(shm_name, O_RDONLY, 0666);
@@ -72,6 +82,21 @@ int alarm_set_frame_threshold(int n)
 {
     if (n < 1) return -1;
     g_alarm.frame_threshold = n;
+    return 0;
+}
+
+int alarm_set_tracker_params(int max_missed, int cooldown_frames,
+                             int reemit_frames, float match_iou_thr,
+                             float smooth_alpha)
+{
+    return tracker_set_params(max_missed, cooldown_frames, reemit_frames,
+                              match_iou_thr, smooth_alpha);
+}
+
+int alarm_set_class_enabled(int class_id, int enabled)
+{
+    if (class_id < 0 || class_id >= MAX_CLASSES) return -1;
+    g_alarm.class_enabled[class_id] = enabled ? 1 : 0;
     return 0;
 }
 
@@ -105,8 +130,9 @@ static void* alarm_loop(void* arg)
         memset(overlaps, 0, sizeof(overlaps));
 
         for (uint32_t i = 0; i < n_det; i++) {
-            // Skip vehicle (backup class)
-            if (g_alarm.shm_result->objects[i].class_id == CLASS_VEHICLE) {
+            int class_id = g_alarm.shm_result->objects[i].class_id;
+            if (class_id < 0 || class_id >= MAX_CLASSES ||
+                !g_alarm.class_enabled[class_id]) {
                 zone_hits[i] = -1;
                 continue;
             }

@@ -1,0 +1,44 @@
+# BSD v5 balanced: YOLO26n at 416, 4-channel throughput candidate.
+model:
+  name: yolo26n
+  pretrained: /root/autodl-tmp/DMS/yolo26n.pt
+
+data:
+  yaml: /root/autodl-tmp/BSD/datasets/bsd_v5_balanced/dataset.yaml
+  proxy_val: /root/autodl-tmp/BSD/datasets/bsd_v5_balanced/bdd_proxy_val.yaml
+  nc: 4
+  names: [person, bicycle, motorcycle, vehicle]
+
+input:
+  imgsz: 416
+  channels: 3
+  format: rgb
+
+training:
+  epochs: 140
+  batch_size: 96
+  patience: 40
+  optimizer: SGD
+  lr0: 0.01
+  lrf: 0.01
+  momentum: 0.937
+  weight_decay: 0.0005
+  warmup_epochs: 3
+  seed: 42
+  close_mosaic: 10
+
+augmentation:
+  hsv_h: 0.015
+  hsv_s: 0.7
+  hsv_v: 0.4
+  translate: 0.1
+  scale: 0.5
+  fliplr: 0.5
+  mosaic: 1.0
+  mixup: 0.0
+  copy_paste: 0.0
+  erasing: 0.4
+
+output:
+  artifact_dir: /root/autodl-tmp/BSD/artifacts
+  name: bsd_v5_yolo26n_416
